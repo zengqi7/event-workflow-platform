@@ -1,5 +1,7 @@
 # Event Workflow Platform
 
+[![CI](https://github.com/zengqi7/event-workflow-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/zengqi7/event-workflow-platform/actions/workflows/ci.yml)
+
 面向企业内部订单、风控和运维系统的多租户事件接入与异步工作流平台。平台解决上游重复投递、同一业务事件重复触发、通知失败难追踪，以及业务写入与异步任务双写不一致的问题。
 
 ## 核心链路
