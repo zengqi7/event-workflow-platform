@@ -1,7 +1,14 @@
 $ErrorActionPreference = 'Stop'
-$env:GOCACHE = 'E:\Cache\codex-project-build\go-build'
-$env:GOMODCACHE = 'E:\Cache\codex-project-build\mod'
-$env:GOTMPDIR = 'E:\Cache\codex-project-build\tmp'
+$cacheRoot = if ($env:PROJECT_CACHE_ROOT) {
+    $env:PROJECT_CACHE_ROOT
+} elseif (Test-Path -LiteralPath 'E:\') {
+    'E:\Cache\codex-project-build'
+} else {
+    Join-Path $env:TEMP 'codex-project-build'
+}
+$env:GOCACHE = Join-Path $cacheRoot 'go-build'
+$env:GOMODCACHE = Join-Path $cacheRoot 'mod'
+$env:GOTMPDIR = Join-Path $cacheRoot 'tmp'
 $env:GOTOOLCHAIN = 'auto'
 New-Item -ItemType Directory -Force -Path $env:GOCACHE,$env:GOMODCACHE,$env:GOTMPDIR | Out-Null
 Push-Location (Split-Path -Parent $PSScriptRoot)
