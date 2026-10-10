@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS outbox_events;
+DROP TABLE IF EXISTS workflow_tasks;
+DROP TABLE IF EXISTS workflow_runs;
+DROP TABLE IF EXISTS rules;
+DROP TABLE IF EXISTS workflows;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS tenants;
