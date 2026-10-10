@@ -70,6 +70,24 @@ func TestEventPostHandler(t *testing.T) {
 	}
 }
 
+func TestInternalErrorsAreNotExposed(t *testing.T) {
+	secret := "mysql connection failed for event_app:password@tcp(mysql:3306)"
+	server := newServer(":0", stubIngestor{err: errors.New(secret)}, stubInspector{err: errors.New(secret)}, stubReadiness{}, stubCache{})
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewBufferString(`{"tenant_code":"acme"}`)),
+		httptest.NewRequest(http.MethodGet, "/api/v1/events?tenant_id=1", nil),
+	} {
+		recorder := httptest.NewRecorder()
+		server.Handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", recorder.Code)
+		}
+		if bytes.Contains(recorder.Body.Bytes(), []byte(secret)) {
+			t.Fatalf("internal error leaked in response: %s", recorder.Body.String())
+		}
+	}
+}
+
 func TestBatchEventHandler(t *testing.T) {
 	server := newServer(":0", stubIngestor{
 		resp: dto.IngestEventResponse{

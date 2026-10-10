@@ -25,8 +25,8 @@ HTTP event -> transport idempotency -> business dedup -> rule evaluation
 
 ```powershell
 Copy-Item .env.example .env
-docker compose -f deployments/docker-compose.yaml up --build -d
-docker compose -f deployments/docker-compose.yaml ps
+docker compose up --build -d
+docker compose ps
 ```
 
 Compose 会启动 MySQL 8.4、Redis 7.4、迁移任务、API、Worker 和本地 Webhook sink。默认只绑定本机：
@@ -46,7 +46,7 @@ Invoke-RestMethod http://127.0.0.1:8080/metrics
 停止服务：
 
 ```powershell
-docker compose -f deployments/docker-compose.yaml down
+docker compose down
 ```
 
 只有明确需要清空数据时才附加 `-v`。
@@ -86,7 +86,7 @@ docker compose -f deployments/docker-compose.yaml down
 
 ```powershell
 .\scripts\test.ps1
-$env:MYSQL_DSN='event_app:event-app-local-only@tcp(127.0.0.1:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC'
+$env:MYSQL_DSN='event_app:<MYSQL_PASSWORD>@tcp(127.0.0.1:<MYSQL_PORT>)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC'
 $env:REDIS_ADDR='127.0.0.1:6379'
 go run ./cmd/migrate
 go run ./cmd/http-server

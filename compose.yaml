@@ -2,7 +2,7 @@ name: event-workflow-platform
 
 x-app-environment: &app-environment
   APP_ENV: docker
-  MYSQL_DSN: "event_app:${MYSQL_PASSWORD:-event-app-local-only}@tcp(mysql:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC"
+  MYSQL_DSN: "event_app:${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC"
   REDIS_ADDR: redis:6379
 
 services:
@@ -10,26 +10,27 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-event-root-local-only}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}"
       MYSQL_DATABASE: event_workflow
       MYSQL_USER: event_app
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-event-app-local-only}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}"
     ports:
       - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
       timeout: 3s
       retries: 30
+      start_period: 10s
 
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
     command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -39,8 +40,7 @@ services:
       retries: 20
 
   migrate:
-    build:
-      context: ..
+    build: .
     entrypoint: ["/usr/local/bin/migrate"]
     environment:
       <<: *app-environment
@@ -51,8 +51,7 @@ services:
     restart: "no"
 
   api:
-    build:
-      context: ..
+    build: .
     environment:
       <<: *app-environment
       HTTP_ADDR: "0.0.0.0:8080"
@@ -71,8 +70,7 @@ services:
     restart: unless-stopped
 
   worker:
-    build:
-      context: ..
+    build: .
     entrypoint: ["/usr/local/bin/worker"]
     environment:
       <<: *app-environment
@@ -86,8 +84,7 @@ services:
     restart: unless-stopped
 
   webhook-sink:
-    build:
-      context: ..
+    build: .
     entrypoint: ["/usr/local/bin/webhook-sink"]
     ports:
       - "127.0.0.1:${WEBHOOK_SINK_PORT:-18081}:18081"

@@ -12,19 +12,19 @@ All Go build caches used by `scripts/test.ps1` are stored under `E:\Cache\codex-
 
 ```powershell
 Copy-Item .env.example .env
-docker compose -f deployments/docker-compose.yaml up --build -d
+docker compose up --build -d
 .\scripts\smoke-test.ps1
 ```
 
-Inspect services with `docker compose -f deployments/docker-compose.yaml ps` and logs with `docker compose -f deployments/docker-compose.yaml logs -f api worker`.
+Inspect services with `docker compose ps` and logs with `docker compose logs -f api worker`.
 
 ## Run Go processes on the host
 
 Start only MySQL and Redis:
 
 ```powershell
-docker compose -f deployments/docker-compose.yaml up -d mysql redis
-$env:MYSQL_DSN='event_app:event-app-local-only@tcp(127.0.0.1:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC'
+docker compose up -d mysql redis
+$env:MYSQL_DSN='event_app:<MYSQL_PASSWORD>@tcp(127.0.0.1:<MYSQL_PORT>)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC'
 $env:REDIS_ADDR='127.0.0.1:6379'
 go run ./cmd/migrate
 ```

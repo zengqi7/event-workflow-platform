@@ -65,7 +65,8 @@ func readyzHandler(readinessStore domainrepo.ReadinessStore, readinessCache doma
 		result := map[string]string{"status": "ok"}
 		if readinessStore != nil {
 			if err := readinessStore.Ping(ctx); err != nil {
-				result["mysql"] = err.Error()
+				log.Printf("readiness mysql failed: %v", err)
+				result["mysql"] = "unavailable"
 				result["status"] = "degraded"
 			} else {
 				result["mysql"] = "ok"
@@ -73,7 +74,8 @@ func readyzHandler(readinessStore domainrepo.ReadinessStore, readinessCache doma
 		}
 		if readinessCache != nil {
 			if err := readinessCache.Ping(ctx); err != nil {
-				result["redis"] = err.Error()
+				log.Printf("readiness redis failed: %v", err)
+				result["redis"] = "unavailable"
 				result["status"] = "degraded"
 			} else {
 				result["redis"] = "ok"
@@ -99,7 +101,8 @@ func eventHandler(ingestor ingestExecutor, inspector domainrepo.InspectionStore)
 			}
 			items, err := inspector.ListRecentEvents(r.Context(), tenantID, requestLimit(r, 20))
 			if err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+				log.Printf("list events failed: %v", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "internal server error"})
 				return
 			}
 			writeJSON(w, http.StatusOK, dto.ListResponse{Items: items, Count: len(items)})
@@ -121,9 +124,12 @@ func eventHandler(ingestor ingestExecutor, inspector domainrepo.InspectionStore)
 				if errors.Is(err, domainrepo.ErrNotFound) {
 					status = http.StatusNotFound
 				}
-				writeJSON(w, status, map[string]string{
-					"message": err.Error(),
-				})
+				message := err.Error()
+				if status == http.StatusInternalServerError {
+					log.Printf("ingest event failed: %v", err)
+					message = "internal server error"
+				}
+				writeJSON(w, status, map[string]string{"message": message})
 				return
 			}
 
@@ -167,10 +173,15 @@ func batchEventHandler(ingestor ingestExecutor) http.HandlerFunc {
 			result, err := ingestor.Execute(r.Context(), item)
 			if err != nil {
 				failed++
+				message := err.Error()
+				if !errors.Is(err, domainrepo.ErrInvalidRequest) && !errors.Is(err, domainrepo.ErrNotFound) {
+					log.Printf("batch ingest item=%d failed: %v", index, err)
+					message = "internal server error"
+				}
 				results = append(results, dto.BatchIngestEventItem{
 					Index: index,
 					OK:    false,
-					Error: err.Error(),
+					Error: message,
 				})
 				continue
 			}
@@ -232,7 +243,8 @@ func listHandler(fetch func(r *http.Request) ([]map[string]any, error)) http.Han
 		}
 		items, err := fetch(r)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+			log.Printf("list workflow state failed: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "internal server error"})
 			return
 		}
 		writeJSON(w, http.StatusOK, dto.ListResponse{Items: items, Count: len(items)})

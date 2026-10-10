@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -29,7 +30,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
+	if err := waitForDatabase(db, 60*time.Second); err != nil {
 		log.Fatal(err)
 	}
 
@@ -116,6 +117,21 @@ WHERE tenant_id = (SELECT id FROM tenants WHERE code = 'acme')
 			log.Fatal(err)
 		}
 	}
+}
+
+func waitForDatabase(db *sql.DB, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		lastErr = db.PingContext(ctx)
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("database not ready after %s: %w", timeout, lastErr)
 }
 
 func loadStatements(path string) ([]string, error) {

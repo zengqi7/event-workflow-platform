@@ -19,7 +19,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping -h localhost -proot-test-password --silent"
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --protocol=tcp -proot-test-password --silent"
           --health-interval 5s --health-timeout 3s --health-retries 30
       redis:
         image: redis:7.4-alpine
@@ -52,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
       - uses: docker/setup-buildx-action@v3
       - name: Build runtime image
         uses: docker/build-push-action@v6
