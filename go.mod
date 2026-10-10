@@ -1,6 +1,6 @@
 module event-workflow-platform
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/go-sql-driver/mysql v1.9.3

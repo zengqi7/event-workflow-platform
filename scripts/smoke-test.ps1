@@ -20,6 +20,15 @@ $first = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/events" -ContentTy
 $reused = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/events" -ContentType 'application/json' -Body $body
 if ($first.event_id -ne $reused.event_id) { throw 'Transport idempotency returned a different database event' }
 
+$conflictBody = $body | ConvertFrom-Json
+$conflictBody.payload.amount = 7000
+try {
+  Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/events" -ContentType 'application/json' -Body ($conflictBody | ConvertTo-Json -Depth 10)
+  throw 'Expected an idempotency conflict for a changed payload'
+} catch {
+  if ([int]$_.Exception.Response.StatusCode -ne 409) { throw }
+}
+
 $dedupBody = $body | ConvertFrom-Json
 $dedupBody.event_id = "evt-$seed-duplicate"
 $dedup = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/events" -ContentType 'application/json' -Body ($dedupBody | ConvertTo-Json -Depth 10)

@@ -63,6 +63,15 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer sink.Close()
+	var originalDefinition []byte
+	if err := db.QueryRowContext(ctx, `SELECT definition_json FROM workflows WHERE id=1`).Scan(&originalDefinition); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := db.ExecContext(context.Background(), `UPDATE workflows SET definition_json=? WHERE id=1`, originalDefinition); err != nil {
+			t.Errorf("restore demo workflow: %v", err)
+		}
+	}()
 	definition, _ := json.Marshal(map[string]any{"nodes": []map[string]any{{"key": "notify_webhook", "type": "webhook", "config": map[string]any{"url": sink.URL, "method": "POST"}}}})
 	if _, err := db.ExecContext(ctx, `UPDATE workflows SET definition_json=? WHERE id=1`, definition); err != nil {
 		t.Fatal(err)
@@ -79,6 +88,11 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 	second := postEvent(t, api.URL, request)
 	if first.EventID != second.EventID {
 		t.Fatalf("idempotency returned different records: %d != %d", first.EventID, second.EventID)
+	}
+	conflicting := request
+	conflicting.Payload = map[string]any{"amount": 7000, "order_id": eventID}
+	if status := postEventStatus(t, api.URL, conflicting); status != http.StatusConflict {
+		t.Fatalf("expected idempotency conflict, got status %d", status)
 	}
 	runner := workertransport.NewRunner(store, notifier.NewWebhookExecutor(3*time.Second))
 	if err := runner.PollOnce(ctx, 100); err != nil {
@@ -130,6 +144,20 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 	if receivedCount != 1 || skippedCount != n-1 {
 		t.Fatalf("dedup race produced received=%d skipped=%d", receivedCount, skippedCount)
 	}
+}
+
+func postEventStatus(t *testing.T, base string, request dto.IngestEventRequest) int {
+	t.Helper()
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Post(base+"/api/v1/events", "application/json", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode
 }
 func postEvent(t *testing.T, base string, req dto.IngestEventRequest) dto.IngestEventResponse {
 	t.Helper()

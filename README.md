@@ -11,7 +11,7 @@ HTTP event -> transport idempotency -> business dedup -> rule evaluation
 ```
 
 - **多租户接入**：事件、规则、工作流、执行记录和查询均带租户边界。
-- **两层防重**：`tenant + source + event_id` 保证接口幂等；`tenant + event_type + business_key + minute bucket` 抑制业务重复。
+- **两层防重**：`tenant + source + event_id` 保证接口幂等，相同键但不同内容返回 `409`；`tenant + event_type + business_key + minute bucket` 抑制业务重复。
 - **并发一致性**：MySQL 唯一约束在事务内裁决并发去重，Redis 只作为幂等辅助，不作为提交事实。
 - **规则与工作流**：按优先级匹配 JSON 条件，命中后生成 run/task。
 - **Transactional Outbox**：事件、run/task 和 Outbox 在同一事务提交。

@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -81,10 +82,14 @@ func TestExecuteReturnsExistingEventOnIdempotencyHit(t *testing.T) {
 		existingEvent: domainevent.Event{
 			ID:          999,
 			TenantID:    1,
+			EventType:   "order.timeout",
+			BusinessKey: "order-1001",
 			TraceID:     "existing-trace",
 			Fingerprint: "existing-fingerprint",
 			DedupKey:    "existing-dedup",
 			Status:      domainevent.StatusReceived,
+			Payload:     map[string]any{"amount": 6999.0},
+			OccurredAt:  time.Date(2026, 8, 14, 10, 30, 0, 0, time.UTC),
 		},
 	}
 	cache := &stubCache{idempotencyAcquire: false}
@@ -100,6 +105,21 @@ func TestExecuteReturnsExistingEventOnIdempotencyHit(t *testing.T) {
 	}
 	if store.persistCalls != 0 {
 		t.Fatalf("expected no persist call, got %d", store.persistCalls)
+	}
+}
+
+func TestExecuteRejectsIdempotencyKeyWithDifferentPayload(t *testing.T) {
+	store := &stubStore{
+		tenant: tenant.Tenant{ID: 1, Code: "acme", Status: "active"},
+		existingEvent: domainevent.Event{
+			ID: 999, TenantID: 1, EventType: "order.timeout", BusinessKey: "order-1001",
+			Payload: map[string]any{"amount": 1.0}, OccurredAt: time.Date(2026, 8, 14, 10, 30, 0, 0, time.UTC),
+		},
+	}
+	cmd := NewIngestEventCommand(store, &stubCache{idempotencyAcquire: false})
+
+	if _, err := cmd.Execute(context.Background(), testRequest()); !errors.Is(err, domainrepo.ErrIdempotencyConflict) {
+		t.Fatalf("expected idempotency conflict, got %v", err)
 	}
 }
 

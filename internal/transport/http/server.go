@@ -124,6 +124,9 @@ func eventHandler(ingestor ingestExecutor, inspector domainrepo.InspectionStore)
 				if errors.Is(err, domainrepo.ErrNotFound) {
 					status = http.StatusNotFound
 				}
+				if errors.Is(err, domainrepo.ErrIdempotencyConflict) {
+					status = http.StatusConflict
+				}
 				message := err.Error()
 				if status == http.StatusInternalServerError {
 					log.Printf("ingest event failed: %v", err)
@@ -174,7 +177,7 @@ func batchEventHandler(ingestor ingestExecutor) http.HandlerFunc {
 			if err != nil {
 				failed++
 				message := err.Error()
-				if !errors.Is(err, domainrepo.ErrInvalidRequest) && !errors.Is(err, domainrepo.ErrNotFound) {
+				if !errors.Is(err, domainrepo.ErrInvalidRequest) && !errors.Is(err, domainrepo.ErrNotFound) && !errors.Is(err, domainrepo.ErrIdempotencyConflict) {
 					log.Printf("batch ingest item=%d failed: %v", index, err)
 					message = "internal server error"
 				}

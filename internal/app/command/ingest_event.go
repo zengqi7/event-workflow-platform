@@ -1,7 +1,9 @@
 package command
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -48,13 +50,14 @@ func (c *IngestEventCommand) Execute(ctx context.Context, req dto.IngestEventReq
 	eventType := strings.TrimSpace(req.EventType)
 	businessKey := strings.TrimSpace(req.BusinessKey)
 
-	if response, handled, err := c.tryReuseExisting(ctx, tenantRecord.ID, source, eventID); handled {
-		return response, err
-	}
-
 	occurredAt, err := time.Parse(time.RFC3339, req.OccurredAt)
 	if err != nil {
 		return dto.IngestEventResponse{}, fmt.Errorf("%w: invalid occurred_at", domainrepo.ErrInvalidRequest)
+	}
+	occurredAt = occurredAt.UTC()
+
+	if response, handled, err := c.tryReuseExisting(ctx, tenantRecord.ID, source, eventID, eventType, businessKey, occurredAt, req.Payload); handled {
+		return response, err
 	}
 
 	traceID := infra.NewTraceID()
@@ -78,7 +81,7 @@ func (c *IngestEventCommand) Execute(ctx context.Context, req dto.IngestEventReq
 		DedupBucket: dedupBucket,
 		Status:      domainevent.StatusReceived,
 		Payload:     req.Payload,
-		OccurredAt:  occurredAt.UTC(),
+		OccurredAt:  occurredAt,
 		CreatedAt:   time.Now().UTC(),
 	}
 
@@ -102,6 +105,9 @@ func (c *IngestEventCommand) Execute(ctx context.Context, req dto.IngestEventReq
 		if errors.Is(err, domainrepo.ErrIdempotencyConflict) {
 			existing, findErr := c.store.FindEventByIdempotency(ctx, evt.TenantID, source, eventID)
 			if findErr == nil {
+				if !sameIdempotentRequest(existing, eventType, businessKey, occurredAt, req.Payload) {
+					return dto.IngestEventResponse{}, domainrepo.ErrIdempotencyConflict
+				}
 				infra.IncIdempotencyHit()
 				return buildExistingResponse(existing), nil
 			}
@@ -161,13 +167,16 @@ func validateIngestEventRequest(req dto.IngestEventRequest) error {
 	}
 }
 
-func (c *IngestEventCommand) tryReuseExisting(ctx context.Context, tenantID uint64, source, eventID string) (dto.IngestEventResponse, bool, error) {
+func (c *IngestEventCommand) tryReuseExisting(ctx context.Context, tenantID uint64, source, eventID, eventType, businessKey string, occurredAt time.Time, payload map[string]any) (dto.IngestEventResponse, bool, error) {
 	idempotencyKey := fmt.Sprintf("idempotency:%d:%s:%s", tenantID, source, eventID)
 	if c.cache != nil {
 		acquired, err := c.cache.AcquireIdempotency(ctx, idempotencyKey, 10*time.Minute)
 		if err == nil && !acquired {
 			existing, findErr := c.store.FindEventByIdempotency(ctx, tenantID, source, eventID)
 			if findErr == nil {
+				if !sameIdempotentRequest(existing, eventType, businessKey, occurredAt, payload) {
+					return dto.IngestEventResponse{}, true, domainrepo.ErrIdempotencyConflict
+				}
 				infra.IncIdempotencyHit()
 				return buildExistingResponse(existing), true, nil
 			}
@@ -176,6 +185,9 @@ func (c *IngestEventCommand) tryReuseExisting(ctx context.Context, tenantID uint
 
 	existing, err := c.store.FindEventByIdempotency(ctx, tenantID, source, eventID)
 	if err == nil {
+		if !sameIdempotentRequest(existing, eventType, businessKey, occurredAt, payload) {
+			return dto.IngestEventResponse{}, true, domainrepo.ErrIdempotencyConflict
+		}
 		infra.IncIdempotencyHit()
 		return buildExistingResponse(existing), true, nil
 	}
@@ -184,6 +196,15 @@ func (c *IngestEventCommand) tryReuseExisting(ctx context.Context, tenantID uint
 	}
 
 	return dto.IngestEventResponse{}, false, nil
+}
+
+func sameIdempotentRequest(existing domainevent.Event, eventType, businessKey string, occurredAt time.Time, payload map[string]any) bool {
+	if existing.EventType != eventType || existing.BusinessKey != businessKey || !existing.OccurredAt.Equal(occurredAt) {
+		return false
+	}
+	existingPayload, existingErr := json.Marshal(existing.Payload)
+	requestPayload, requestErr := json.Marshal(payload)
+	return existingErr == nil && requestErr == nil && bytes.Equal(existingPayload, requestPayload)
 }
 
 func (c *IngestEventCommand) isDedupHit(ctx context.Context, evt domainevent.Event) (bool, error) {

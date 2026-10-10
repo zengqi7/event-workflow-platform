@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $env:GOCACHE = 'E:\Cache\codex-project-build\go-build'
 $env:GOMODCACHE = 'E:\Cache\codex-project-build\mod'
 $env:GOTMPDIR = 'E:\Cache\codex-project-build\tmp'
-$env:GOTOOLCHAIN = 'local'
+$env:GOTOOLCHAIN = 'auto'
 New-Item -ItemType Directory -Force -Path $env:GOCACHE,$env:GOMODCACHE,$env:GOTMPDIR | Out-Null
 Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
