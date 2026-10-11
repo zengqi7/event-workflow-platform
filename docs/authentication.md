@@ -1,0 +1,11 @@
+# Tenant credentials and quotas
+
+Apply migrations before deploying E1. Public business routes require Authorization: Bearer <token>. The credential determines tenant ID/code; omitted tenant fields are filled, conflicting query tenants return 403 and conflicting event bodies fail validation. Each batch item is checked independently. Health and metrics belong on the private operations network.
+
+Create an operator-managed credential using `go run ./cmd/key -tenant 1 -subject local-demo -scopes events:write,state:read -ttl 720h` with MYSQL_DSN supplied securely. The raw random token is printed once; only its SHA-256 hash is persisted. Never paste it into Git, PRs or logs. The key CLI is also included in the runtime image. Revoke with `-tenant 1 -subject operator -revoke <key_id>`. Rotate by issuing a new key, moving callers, then revoking the old key. Database access for the CLI is a privileged operator boundary, not an anonymous API.
+
+Scopes: events:write, state:read, workflows:write and runs:replay. Keys require expiry, belong to an active tenant and are checked against MySQL per request. No wildcard scope or anonymous compatibility mode is provided. A request already admitted before revocation may finish within its request deadline.
+
+Default limits are 600 HTTP requests per UTC minute and 10,000 active tasks per tenant. Configure tenants.requests_per_minute / max_pending_tasks through privileged operations. The minute counter is database-backed and serialized on the tenant row across replicas; batches additionally consume the active task quota. This is a fixed-window request limit, not a claim of sliding-window fairness. E5 adds scheduler fairness. Admission outages return 503; quota rejection returns 429. Low-volume operators can inspect audit_events by tenant/time; admission records are request intents, not proof that business execution succeeded. Tokens and request payloads are never stored in the audit log.
+
+Smoke: provide EVENT_API_TOKEN to scripts/smoke-test.ps1. Test unauthenticated 401, read-only key write 403, foreign tenant 403, cross-tenant batch failure and post-revocation 401. Integration tests issue and revoke their own temporary credentials on a disposable schema.

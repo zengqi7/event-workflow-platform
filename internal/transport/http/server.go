@@ -15,6 +15,7 @@ import (
 	"event-workflow-platform/internal/app/dto"
 	domainrepo "event-workflow-platform/internal/domain/repository"
 	"event-workflow-platform/internal/infra"
+	"event-workflow-platform/internal/service/auth"
 )
 
 type ingestExecutor interface {
@@ -22,7 +23,10 @@ type ingestExecutor interface {
 }
 
 func NewServer(addr string, ingestor *command.IngestEventCommand, inspector domainrepo.InspectionStore, readinessStore domainrepo.ReadinessStore, readinessCache domainrepo.Cache) *http.Server {
-	return newServer(addr, ingestor, inspector, readinessStore, readinessCache)
+	server := newServer(addr, tenantIngestor{next: ingestor}, inspector, readinessStore, readinessCache)
+	repo, _ := inspector.(auth.Repository)
+	server.Handler = authorization(server.Handler, repo)
+	return server
 }
 
 func newServer(addr string, ingestor ingestExecutor, inspector domainrepo.InspectionStore, readinessStore domainrepo.ReadinessStore, readinessCache domainrepo.Cache) *http.Server {
@@ -126,6 +130,9 @@ func eventHandler(ingestor ingestExecutor, inspector domainrepo.InspectionStore)
 				}
 				if errors.Is(err, domainrepo.ErrIdempotencyConflict) {
 					status = http.StatusConflict
+				}
+				if errors.Is(err, auth.ErrQuota) {
+					status = http.StatusTooManyRequests
 				}
 				message := err.Error()
 				if status == http.StatusInternalServerError {
@@ -267,6 +274,9 @@ func requestLimit(r *http.Request, fallback int) int {
 }
 
 func requestTenant(r *http.Request) (uint64, error) {
+	if p, ok := auth.FromContext(r.Context()); ok {
+		return p.TenantID, nil
+	}
 	id, err := strconv.ParseUint(r.URL.Query().Get("tenant_id"), 10, 64)
 	if err != nil || id == 0 {
 		return 0, errors.New("positive tenant_id is required")
