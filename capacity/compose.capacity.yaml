@@ -1,0 +1,17 @@
+services:
+  mysql:
+    cpus: 2.0
+    mem_limit: 1536m
+  redis:
+    cpus: 1.0
+    mem_limit: 512m
+  api:
+    cpus: 2.0
+    mem_limit: 512m
+  worker:
+    cpus: 2.0
+    mem_limit: 512m
+    restart: "no"
+  webhook-sink:
+    cpus: 1.0
+    mem_limit: 256m
