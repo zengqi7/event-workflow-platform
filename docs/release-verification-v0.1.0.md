@@ -1,8 +1,8 @@
 # v0.1.0 release verification
 
 Verification date: 2026-10-11. The release was kept as a draft until every
-gate in this document passed. Evidence describes this immutable release only;
-later commits on `main` do not change the tag or its assets.
+gate in this document passed. Evidence describes this tagged release only;
+later commits on `main` do not change the tag or the assets already verified.
 
 ## Release identity
 
@@ -20,6 +20,11 @@ later commits on `main` do not change the tag or its assets.
 exact-tag/main preflight, unit and race tests, vet, vulnerability scan, real
 integration tests, container build, packaging, checksums and build-attestation
 jobs all passed.
+
+GitHub reports `isImmutable=false` because immutable releases are not enabled
+for this repository. Maintainers must therefore treat the signed tag and the
+verified asset set as append-only and never replace or move them. Consumers
+must still verify both checksums and attestations after every download.
 
 ## Download verification
 
