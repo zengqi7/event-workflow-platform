@@ -6,6 +6,17 @@
     "description": "Tenant identity derives from Bearer credentials. Event tenant_code is optional and must match the authenticated tenant when supplied."
   },
   "paths": {
+    "/api/v1/workflow-runs/{id}/replay": {
+      "post": {
+        "description": "Full DAG replay of a finished runtime snapshot. Requires runs:replay; creates new run/generation/delivery keys. Retry uses the existing delivery key.",
+        "parameters": [
+          {"name":"id","in":"path","required":true,"schema":{"type":"integer","minimum":1}},
+          {"name":"Idempotency-Key","in":"header","required":true,"schema":{"type":"string","minLength":1,"maxLength":128}}
+        ],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","additionalProperties":false,"required":["reason"],"properties":{"reason":{"type":"string","minLength":1,"maxLength":255}}}}}},
+        "responses":{"201":{"description":"New replay admitted"},"200":{"description":"Same request already admitted"},"400":{"description":"Invalid request"},"401":{"description":"Invalid credential"},"403":{"description":"Missing scope"},"404":{"description":"Unknown or foreign run"},"409":{"description":"Run unfinished, legacy snapshot, corrupted snapshot or request key conflict"},"429":{"description":"Quota exceeded"},"500":{"description":"Replay failed"}}
+      }
+    },
     "/api/v1/workflows": {
       "post": {
         "description": "Publish an immutable workflow version; workflows:write required. Dependencies form a DAG and execute after all parents succeed.",

@@ -11,6 +11,7 @@ import (
 )
 
 var ErrVersionConflict = errors.New("workflow version already exists")
+var ErrReplayConflict = errors.New("run cannot be replayed or request key reused")
 
 type Workflow struct {
 	ID         uint64
@@ -39,6 +40,12 @@ type RunPlan struct {
 	WorkflowVersion  int
 	DefinitionJSON   json.RawMessage
 	DefinitionDigest string
+}
+
+type ReplayResult struct {
+	RunID      uint64 `json:"run_id"`
+	Generation int    `json:"generation"`
+	Reused     bool   `json:"reused"`
 }
 
 type TaskPlan struct {
@@ -80,6 +87,12 @@ func (d Definition) Validate() error {
 		}
 		if _, ok := n.Config["secret"]; ok {
 			return fmt.Errorf("inline secrets forbidden; use secret_ref")
+		}
+		if ref, ok := n.Config["secret_ref"]; ok {
+			value, valid := ref.(string)
+			if !valid || !regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`).MatchString(value) {
+				return fmt.Errorf("invalid secret_ref")
+			}
 		}
 		nodes[n.Key] = n
 	}

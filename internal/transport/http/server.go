@@ -36,6 +36,7 @@ func newServer(addr string, ingestor ingestExecutor, inspector domainrepo.Inspec
 	mux.HandleFunc("/api/v1/events", eventHandler(ingestor, inspector))
 	mux.HandleFunc("/api/v1/events/batch", batchEventHandler(ingestor))
 	mux.HandleFunc("/api/v1/workflow-runs", listWorkflowRunsHandler(inspector))
+	mux.HandleFunc("/api/v1/workflow-runs/", replayRunHandler(inspector))
 	mux.HandleFunc("/api/v1/workflow-tasks", listWorkflowTasksHandler(inspector))
 	mux.HandleFunc("/api/v1/outbox-events", listOutboxEventsHandler(inspector))
 	mux.HandleFunc("/api/v1/workflows", publishWorkflowHandler(inspector))

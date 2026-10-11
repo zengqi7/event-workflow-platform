@@ -100,7 +100,7 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 	if status := postEventStatus(t, api.URL, conflicting); status != http.StatusConflict {
 		t.Fatalf("expected idempotency conflict, got status %d", status)
 	}
-	runner := workertransport.NewRunner(store, notifier.NewWebhookExecutor(3*time.Second))
+	runner := workertransport.NewRunner(store, notifier.NewDevelopmentWebhookExecutor(3*time.Second, "127.0.0.1"))
 	if err := runner.PollOnce(ctx, 100); err != nil {
 		t.Fatal(err)
 	}

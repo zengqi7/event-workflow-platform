@@ -74,6 +74,8 @@ services:
     entrypoint: ["/usr/local/bin/worker"]
     environment:
       <<: *app-environment
+      WEBHOOK_ALLOWED_HOSTS: webhook-sink
+      WEBHOOK_ALLOW_DEVELOPMENT: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully

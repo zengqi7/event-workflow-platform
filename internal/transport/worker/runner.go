@@ -84,7 +84,9 @@ func (r *Runner) handleOutbox(ctx context.Context, item outbox.Event) error {
 	body["idempotency_key"] = task.IdempotencyKey
 	deliveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	execErr := r.notifier.Execute(deliveryCtx, method, url, body)
+	config, _ := item.Payload["config"].(map[string]any)
+	ref, _ := config["secret_ref"].(string)
+	execErr := r.notifier.ExecuteDelivery(deliveryCtx, method, url, body, item.TenantID, ref)
 	if execErr == nil {
 		infra.IncWebhookSuccess()
 		err := r.store.FinishDelivery(ctx, item, task, "success", "", time.Time{})

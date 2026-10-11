@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -29,7 +31,9 @@ func main() {
 	defer db.Close()
 
 	store := mysqlrepo.NewStore(db)
-	executor := notifier.NewWebhookExecutor(5 * time.Second)
+	policy := notifier.Policy{AllowedHosts: strings.FieldsFunc(os.Getenv("WEBHOOK_ALLOWED_HOSTS"), func(r rune) bool { return r == ',' })}
+	policy.Development = (cfg.Environment == "dev" || cfg.Environment == "docker") && os.Getenv("WEBHOOK_ALLOW_DEVELOPMENT") == "true"
+	executor := notifier.NewWithPolicy(5*time.Second, policy, notifier.DirectorySecrets{Root: os.Getenv("WEBHOOK_SECRET_DIR")})
 	runner := workertransport.NewRunner(store, executor)
 
 	ticker := time.NewTicker(5 * time.Second)
