@@ -25,12 +25,6 @@ func (s *Store) PublishWorkflow(ctx context.Context, item workflow.Workflow, rul
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", domainrepo.ErrInvalidRequest, err)
 	}
-	// E2 only publishes dependent nodes as draft until E3 installs the DAG scheduler.
-	for _, n := range item.Definition.Nodes {
-		if len(n.DependsOn) > 0 && item.Status == "active" {
-			return 0, domainrepo.ErrInvalidRequest
-		}
-	}
 	if ruleID != 0 && item.Status != "active" {
 		return 0, domainrepo.ErrInvalidRequest
 	}

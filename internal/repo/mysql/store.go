@@ -17,7 +17,6 @@ import (
 	"event-workflow-platform/internal/domain/rule"
 	"event-workflow-platform/internal/domain/tenant"
 	"event-workflow-platform/internal/domain/workflow"
-	"event-workflow-platform/internal/infra"
 	"event-workflow-platform/internal/service/auth"
 )
 
@@ -271,7 +270,7 @@ INSERT INTO outbox_events (
 			plan.WorkflowID,
 			plan.TriggerRuleID,
 			"pending",
-			evt.CreatedAt,
+			nil,
 			plan.WorkflowVersion,
 			plan.DefinitionJSON,
 			plan.DefinitionDigest,
@@ -286,12 +285,17 @@ INSERT INTO outbox_events (
 		}
 		result.WorkflowRuns++
 
+		taskIDs := make(map[string]int64, len(plan.Tasks))
 		for _, task := range plan.Tasks {
+			initialStatus := "pending"
+			if len(task.DependsOn) > 0 {
+				initialStatus = "blocked"
+			}
 			taskResult, err := tx.ExecContext(ctx, insertTaskQuery,
 				runID,
 				task.NodeKey,
 				task.TaskType,
-				"pending",
+				initialStatus,
 				0,
 				3,
 				task.ScheduledAt,
@@ -305,6 +309,7 @@ INSERT INTO outbox_events (
 			if err != nil {
 				return domainrepo.PersistResult{}, err
 			}
+			taskIDs[task.NodeKey] = taskID
 
 			outboxPayload, err := json.Marshal(map[string]any{
 				"tenant_id":       evt.TenantID,
@@ -328,12 +333,23 @@ INSERT INTO outbox_events (
 				fmt.Sprintf("%d", taskID),
 				"workflow.task.created",
 				outboxPayload,
-				"pending",
+				initialStatus,
 			); err != nil {
 				return domainrepo.PersistResult{}, err
 			}
 
 			result.WorkflowTasks++
+		}
+		for _, task := range plan.Tasks {
+			for _, parent := range task.DependsOn {
+				parentID, ok := taskIDs[parent]
+				if !ok {
+					return domainrepo.PersistResult{}, fmt.Errorf("missing dependency %s", parent)
+				}
+				if _, err := tx.ExecContext(ctx, `INSERT INTO task_dependencies(run_id,parent_task_id,child_task_id) VALUES(?,?,?)`, runID, parentID, taskIDs[task.NodeKey]); err != nil {
+					return domainrepo.PersistResult{}, err
+				}
+			}
 		}
 	}
 
@@ -357,99 +373,7 @@ func nullIfEmpty(value string) any {
 }
 
 func (s *Store) ClaimPendingOutbox(ctx context.Context, limit int) ([]outbox.Event, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	const selectQuery = `
-SELECT id, tenant_id, aggregate_type, aggregate_id, event_type, payload_json, status, retry_count, next_retry_at, published_at, created_at
-FROM outbox_events
-WHERE (status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= UTC_TIMESTAMP(3)))
-   OR (status = 'processing' AND lease_until <= UTC_TIMESTAMP(3))
-ORDER BY id
-LIMIT ?
-FOR UPDATE SKIP LOCKED`
-
-	rows, err := tx.QueryContext(ctx, selectQuery, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	events := make([]outbox.Event, 0)
-	for rows.Next() {
-		var (
-			item       outbox.Event
-			payloadRaw []byte
-		)
-		if err := rows.Scan(
-			&item.ID,
-			&item.TenantID,
-			&item.AggregateType,
-			&item.AggregateID,
-			&item.EventType,
-			&payloadRaw,
-			&item.Status,
-			&item.RetryCount,
-			&item.NextRetryAt,
-			&item.PublishedAt,
-			&item.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		decoder := json.NewDecoder(bytes.NewReader(payloadRaw))
-		decoder.UseNumber()
-		if err := decoder.Decode(&item.Payload); err != nil {
-			return nil, err
-		}
-		events = append(events, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(events) == 0 {
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return events, nil
-	}
-
-	const updateQuery = `
-UPDATE outbox_events
-SET status = 'processing', lease_token = ?, lease_until = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 60 SECOND), updated_at = UTC_TIMESTAMP(3)
-WHERE id = ?`
-
-	for i := range events {
-		item := &events[i]
-		item.LeaseToken = infra.NewTraceID()
-		if _, err := tx.ExecContext(ctx, updateQuery, item.LeaseToken, item.ID); err != nil {
-			return nil, err
-		}
-		if item.AggregateType == "workflow_task" {
-			if _, err := tx.ExecContext(ctx, `
-UPDATE workflow_tasks
-SET status = 'running', started_at = COALESCE(started_at, UTC_TIMESTAMP(3)), updated_at = UTC_TIMESTAMP(3)
-WHERE id = CAST(? AS UNSIGNED) AND status IN ('pending', 'retrying', 'running')`, item.AggregateID); err != nil {
-				return nil, err
-			}
-			if _, err := tx.ExecContext(ctx, `
-UPDATE workflow_runs
-SET status = 'running', updated_at = UTC_TIMESTAMP(3)
-WHERE id = (SELECT run_id FROM workflow_tasks WHERE id = CAST(? AS UNSIGNED))
-  AND status IN ('pending', 'running')`, item.AggregateID); err != nil {
-				return nil, err
-			}
-		}
-		item.Status = outbox.StatusProcessing
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return events, nil
+	return s.claimDAGOutbox(ctx, limit)
 }
 
 // FinishDelivery fences stale workers and commits task/outbox/run state together.
@@ -459,11 +383,20 @@ func (s *Store) FinishDelivery(ctx context.Context, item outbox.Event, task work
 		return err
 	}
 	defer tx.Rollback()
+	// All runtime mutations serialize on the run, then outbox, then task.
+	if task.RunID != 0 {
+		var runID uint64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM workflow_runs WHERE id=? FOR UPDATE`, task.RunID).Scan(&runID); err != nil {
+			return err
+		}
+	}
 	var token, current string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(lease_token, ''), status FROM outbox_events WHERE id = ? FOR UPDATE`, item.ID).Scan(&token, &current); err != nil {
+	var live bool
+	var aggregate string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(lease_token, ''), status,COALESCE(lease_until>UTC_TIMESTAMP(3),FALSE),aggregate_id FROM outbox_events WHERE id = ? FOR UPDATE`, item.ID).Scan(&token, &current, &live, &aggregate); err != nil {
 		return err
 	}
-	if current != "processing" || token != item.LeaseToken {
+	if current != "processing" || token != item.LeaseToken || !live {
 		return domainrepo.ErrLeaseLost
 	}
 	outboxStatus := "published"
@@ -479,15 +412,29 @@ func (s *Store) FinishDelivery(ctx context.Context, item outbox.Event, task work
 		return fmt.Errorf("invalid delivery status %q", status)
 	}
 	if task.ID != 0 {
-		if _, err := tx.ExecContext(ctx, `UPDATE workflow_tasks SET status = ?, last_error = ?, retry_count = retry_count + IF(? = 'success', 0, 1), scheduled_at = COALESCE(?, scheduled_at), started_at = COALESCE(started_at, UTC_TIMESTAMP(3)), finished_at = IF(? IN ('success', 'failed'), UTC_TIMESTAMP(3), NULL) WHERE id = ? AND run_id = ?`, status, lastError, status, retryAt, status, task.ID, task.RunID); err != nil {
+		if aggregate != fmt.Sprint(task.ID) {
+			return domainrepo.ErrLeaseLost
+		}
+		result, err := tx.ExecContext(ctx, `UPDATE workflow_tasks SET status = ?, last_error = ?, retry_count = retry_count + IF(? = 'success', 0, 1), scheduled_at = COALESCE(?, scheduled_at), started_at = COALESCE(started_at, UTC_TIMESTAMP(3)), finished_at = IF(? IN ('success', 'failed'), UTC_TIMESTAMP(3), NULL) WHERE id = ? AND run_id = ? AND status='running'`, status, lastError, status, retryAt, status, task.ID, task.RunID)
+		if err != nil {
 			return err
+		}
+		changed, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if changed != 1 {
+			return domainrepo.ErrLeaseLost
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE outbox_events SET status = ?, retry_count = retry_count + IF(? = 'published', 0, 1), next_retry_at = ?, published_at = IF(? = 'published', UTC_TIMESTAMP(3), NULL), lease_token = NULL, lease_until = NULL WHERE id = ?`, outboxStatus, outboxStatus, retryAt, outboxStatus, item.ID); err != nil {
 		return err
 	}
 	if task.RunID != 0 {
-		if _, err := tx.ExecContext(ctx, `UPDATE workflow_runs SET status = CASE WHEN EXISTS (SELECT 1 FROM workflow_tasks WHERE run_id = ? AND status = 'failed') THEN 'failed' WHEN EXISTS (SELECT 1 FROM workflow_tasks WHERE run_id = ? AND status IN ('pending','running','retrying')) THEN 'running' ELSE 'success' END, finished_at = IF(EXISTS (SELECT 1 FROM workflow_tasks WHERE run_id = ? AND status IN ('pending','running','retrying')), NULL, UTC_TIMESTAMP(3)) WHERE id = ?`, task.RunID, task.RunID, task.RunID, task.RunID); err != nil {
+		if err := settleDependencies(ctx, tx, task, status); err != nil {
+			return err
+		}
+		if err := refreshRun(ctx, tx, task.RunID); err != nil {
 			return err
 		}
 	}

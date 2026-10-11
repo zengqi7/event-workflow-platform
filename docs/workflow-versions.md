@@ -14,8 +14,8 @@ of the same tenant in the publication transaction. Unknown/foreign rules return
 
 Definitions contain 1-100 unique nodes. Supported types: webhook; methods: POST
 (default), PUT. `depends_on` is checked for missing/duplicate/self edges and cycles
-regardless of node order. E2 accepts dependent nodes only as `draft`; E3 introduces
-their execution. Inline `secret` is forbidden; secret references are wired in E4.
+regardless of node order. E3 executes dependent nodes through persisted DAG edges.
+Inline `secret` is forbidden; secret references are wired in E4.
 URL syntax validation is not SSRF protection; outbound enforcement follows in E4.
 
 Database triggers prohibit definition/name/tenant/version mutation and deletion.
