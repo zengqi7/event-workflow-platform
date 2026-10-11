@@ -78,6 +78,12 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 	}
 
 	store := mysqlrepo.NewStore(db)
+	keyID, token, err := store.CreateKey(ctx, 1, "integration", []string{"events:write", "state:read"}, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.RevokeKey(context.Background(), 1, keyID, "integration-cleanup")
+	t.Setenv("EVENT_API_TOKEN", token)
 	cache := redisrepo.NewCache(client)
 	ingestor := command.NewIngestEventCommand(store, cache)
 	api := httptest.NewServer(httptransport.NewServer(":0", ingestor, store, store, cache).Handler)
@@ -152,7 +158,13 @@ func postEventStatus(t *testing.T, base string, request dto.IngestEventRequest) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Post(base+"/api/v1/events", "application/json", bytes.NewReader(raw))
+	req, err := http.NewRequest(http.MethodPost, base+"/api/v1/events", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("EVENT_API_TOKEN"))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +181,13 @@ func postEvent(t *testing.T, base string, req dto.IngestEventRequest) dto.Ingest
 }
 func postEventResult(base string, request dto.IngestEventRequest) (dto.IngestEventResponse, error) {
 	raw, _ := json.Marshal(request)
-	resp, err := http.Post(base+"/api/v1/events", "application/json", bytes.NewReader(raw))
+	req, err := http.NewRequest(http.MethodPost, base+"/api/v1/events", bytes.NewReader(raw))
+	if err != nil {
+		return dto.IngestEventResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("EVENT_API_TOKEN"))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return dto.IngestEventResponse{}, err
 	}

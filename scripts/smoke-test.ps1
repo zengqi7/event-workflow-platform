@@ -3,6 +3,8 @@ param(
   [string]$SinkUrl = 'http://127.0.0.1:18081'
 )
 $ErrorActionPreference = 'Stop'
+if (-not $env:EVENT_API_TOKEN) { throw 'Set EVENT_API_TOKEN to a credential with events:write,state:read' }
+$PSDefaultParameterValues['Invoke-RestMethod:Headers'] = @{ Authorization = "Bearer $env:EVENT_API_TOKEN" }
 $seed = [guid]::NewGuid().ToString('N')
 $occurredAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $body = @{

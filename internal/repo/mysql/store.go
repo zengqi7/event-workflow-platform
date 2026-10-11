@@ -18,6 +18,7 @@ import (
 	"event-workflow-platform/internal/domain/tenant"
 	"event-workflow-platform/internal/domain/workflow"
 	"event-workflow-platform/internal/infra"
+	"event-workflow-platform/internal/service/auth"
 )
 
 type Store struct {
@@ -177,6 +178,21 @@ func (s *Store) PersistIngestResult(ctx context.Context, evt domainevent.Event, 
 		return domainrepo.PersistResult{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	var maxPending int
+	if err := tx.QueryRowContext(ctx, `SELECT max_pending_tasks FROM tenants WHERE id=? FOR UPDATE`, evt.TenantID).Scan(&maxPending); err != nil {
+		return domainrepo.PersistResult{}, err
+	}
+	var pending int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE r.tenant_id=? AND t.status IN ('pending','blocked','running','retrying')`, evt.TenantID).Scan(&pending); err != nil {
+		return domainrepo.PersistResult{}, err
+	}
+	newTasks := 0
+	for _, plan := range plans {
+		newTasks += len(plan.Tasks)
+	}
+	if pending+newTasks > maxPending {
+		return domainrepo.PersistResult{}, auth.ErrQuota
+	}
 
 	payloadRaw, err := json.Marshal(evt.Payload)
 	if err != nil {
