@@ -9,7 +9,8 @@ function Assert-Contains([string]$Path, [string]$Value) {
 }
 
 $version = (Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw -Encoding UTF8).Trim()
-if ($version -ne '0.1.0') { throw "VERSION must be 0.1.0, got $version" }
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "invalid VERSION: $version" }
+Assert-Contains 'docs/support-matrix.md' ('release `v' + $version + '`')
 
 Assert-Contains 'go.mod' "go 1.27.2"
 Assert-Contains 'Dockerfile' 'FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build'

@@ -16,6 +16,16 @@ jobs:
         run: |
           python3 -m unittest discover -s capacity -p 'test_*.py'
           python3 capacity/evidence.py pack capacity/evidence/v0.1.0 dist/benchmark-evidence.tar.gz
+      - name: Strict release verifier contracts
+        shell: pwsh
+        run: ./scripts/test-release-verifier.ps1
+      - name: Release version and tag guards
+        run: |
+          bash scripts/release-preflight.sh snapshot
+          if GITHUB_REF=refs/tags/v0.0.0 GITHUB_REF_NAME=v0.0.0 GITHUB_SHA=$(git rev-parse HEAD) bash scripts/release-preflight.sh tag; then
+            echo 'mismatched version/tag was accepted' >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-evidence

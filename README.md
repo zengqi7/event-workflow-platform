@@ -4,6 +4,16 @@
 
 面向订单与运维系统的多租户事件和可靠 Webhook 工作流平台。用于订单超时后通知客服、再通知履约系统等有先后依赖的自动化：上游可安全重试，规则绑定不可变工作流，执行过程可以追踪和审计。
 
+## 工程证据
+
+| 资料 | 内容 |
+|---|---|
+| [最新 Release](https://github.com/zengqi7/event-workflow-platform/releases/latest) | 发行包、checksum、provenance 和版本说明 |
+| [支持矩阵](docs/support-matrix.md) | Go、数据库、Docker、工具版本及平台验证边界 |
+| [容量报告](docs/capacity/v0.1.0.md) | 历史固定负载的吞吐、P95、恢复和资源数据 |
+| [可审计测试输入](capacity/evidence/v0.1.0) | 脱敏样本、汇总、元数据和 SHA-256；可机器复算 |
+| [发行验证](docs/release-verification.md) | 严格验证流程；每次完成结果见 Release notes |
+
 ## 已实现能力
 
 - 数据库 API Key 绑定 tenant、subject、scope、到期与吊销；请求配额、任务配额和审计。

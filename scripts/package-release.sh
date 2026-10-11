@@ -28,4 +28,5 @@ for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 d
     tar -czf "$out/$base.tar.gz" -C "$out" "$base"
   fi
 done
+python3 capacity/evidence.py pack capacity/evidence/v0.1.0 "$out/benchmark-evidence.tar.gz"
 (cd "$out" && sha256sum ./*.tar.gz ./*.zip > checksums.txt)

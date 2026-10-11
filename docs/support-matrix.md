@@ -1,8 +1,11 @@
 # Support matrix
 
-This matrix applies to release `v0.1.0`. "Supported" is the declared release
+This matrix applies to release `v0.1.1`. "Supported" is the declared release
 contract. "Verified" records the exact versions and environments exercised for
-this release; it does not establish a minimum compatible Docker version.
+the v0.1.x line; it does not establish a minimum compatible Docker version.
+Historical capacity inputs retain the original v0.1.0 candidate commit.
+Exact patch download/runtime outcomes are recorded in the Release notes;
+cross-compilation is not native validation.
 
 ## Runtime and toolchain
 
@@ -19,7 +22,7 @@ this release; it does not establish a minimum compatible Docker version.
 
 ## Platforms
 
-| Platform | Status for v0.1.0 | Evidence |
+| Platform | Status for v0.1.x | Evidence |
 |---|---|---|
 | Linux amd64 | Native CI and container runtime verified | Ubuntu 24.04 GitHub-hosted runner; Docker Desktop WSL2 local smoke |
 | Windows amd64 | Native source build/test verified | Windows host with Go 1.27.2 |

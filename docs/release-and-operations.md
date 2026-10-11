@@ -1,7 +1,8 @@
 # Release, upgrade and recovery
 
-Release `v0.1.0` is created as a draft from the exact `main` commit. The tag
-workflow runs the release preflight, builds six archives, strictly checks their
+Release `v0.1.1` is created as a draft from the exact `main` commit. The tag
+workflow runs the release preflight, builds six binary archives and one sanitized
+benchmark evidence archive, strictly checks their
 names and checksums, and emits GitHub build attestations. Manual dispatch builds
 snapshot artifacts only. Verify the draft in a new directory with
 `scripts/verify-release-download.ps1` before publishing it.
@@ -17,9 +18,9 @@ commit semantics.
 ```powershell
 # Keep the verified TUF cache on the operator's chosen data drive.
 $env:XDG_CACHE_HOME = 'E:\GitHubCLICache\release-verification'
-$releaseCommit = git rev-list -n 1 v0.1.0
+$releaseCommit = git rev-list -n 1 v0.1.1
 & .\scripts\verify-release-download.ps1 `
-  -ExpectedSourceSha $releaseCommit -ExpectedSignerSha $releaseCommit `
+  -Tag v0.1.1 -ExpectedSourceSha $releaseCommit -ExpectedSignerSha $releaseCommit `
   -Destination 'E:\release-verification\event-workflow-platform-fresh' `
   -GhCommand 'E:\Apps\GitHubCLI\gh.exe'
 ```
@@ -28,6 +29,14 @@ Use a new or empty destination on each attempt. If Sigstore initialization fails
 check network access, clock, disk space and cache permissions; retry with a fresh
 cache directory. Never bypass TUF, signature, transparency-log or identity checks.
 Retain the failed attempt separately. Do not publish a draft on partial success.
+
+GitHub immutable releases are enabled for future publication. A Draft remains
+editable while checks run; publication then locks its assets and associated tag.
+Upload every intended asset and finish the curated notes before publishing.
+The old v0.1.0 remains mutable on GitHub and is preserved by policy; never move
+its tag or replace assets. See [verification protocol](release-verification.md)
+and [patch notes](releases/v0.1.1.md). Historical benchmark evidence does not
+constitute a new capacity measurement of v0.1.1.
 
 ## Compatibility
 
