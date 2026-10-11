@@ -1,5 +1,11 @@
 # Release, upgrade and recovery
 
+Release `v0.1.0` is created as a draft from the exact `main` commit. The tag
+workflow runs the release preflight, builds six archives, strictly checks their
+names and checksums, and emits GitHub build attestations. Manual dispatch builds
+snapshot artifacts only. Verify the draft in a new directory with
+`scripts/verify-release-download.ps1` before publishing it.
+
 ## Compatibility
 
 This is a pre-1.0 reference implementation, without a production SLA or a zero-downtime schema guarantee. API v1 may add fields; clients should ignore unknown fields. Auth/trust requirements and schema contracts can change only with an explicit upgrade note. Use reviewed immutable revisions for CI Actions and digest-pinned images.

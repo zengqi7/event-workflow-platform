@@ -19,7 +19,7 @@ for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 d
     [[ "$os" != windows ]] || suffix=".exe"
     CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "$bundle/bin/$command$suffix" "./cmd/$command"
   done
-  cp README.md LICENSE "$bundle/"
+  cp README.md LICENSE VERSION "$bundle/"
   cp -r docs migrations "$bundle/"
   base="$(basename "$bundle")"
   if [[ "$os" == windows ]]; then
