@@ -38,6 +38,7 @@ func newServer(addr string, ingestor ingestExecutor, inspector domainrepo.Inspec
 	mux.HandleFunc("/api/v1/workflow-runs", listWorkflowRunsHandler(inspector))
 	mux.HandleFunc("/api/v1/workflow-tasks", listWorkflowTasksHandler(inspector))
 	mux.HandleFunc("/api/v1/outbox-events", listOutboxEventsHandler(inspector))
+	mux.HandleFunc("/api/v1/workflows", publishWorkflowHandler(inspector))
 	mux.HandleFunc("/metrics", metricsHandler)
 
 	return &http.Server{

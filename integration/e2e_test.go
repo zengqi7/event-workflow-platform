@@ -63,17 +63,17 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer sink.Close()
-	var originalDefinition []byte
-	if err := db.QueryRowContext(ctx, `SELECT definition_json FROM workflows WHERE id=1`).Scan(&originalDefinition); err != nil {
+	eventType := fmt.Sprintf("integration.%d", time.Now().UnixNano())
+	definition, _ := json.Marshal(map[string]any{"nodes": []map[string]any{{"key": "notify_webhook", "type": "webhook", "config": map[string]any{"url": sink.URL, "method": "POST"}}}})
+	result, err := db.ExecContext(ctx, `INSERT INTO workflows(tenant_id,name,version,status,definition_json) VALUES(1,?,1,'active',?)`, eventType, definition)
+	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		if _, err := db.ExecContext(context.Background(), `UPDATE workflows SET definition_json=? WHERE id=1`, originalDefinition); err != nil {
-			t.Errorf("restore demo workflow: %v", err)
-		}
-	}()
-	definition, _ := json.Marshal(map[string]any{"nodes": []map[string]any{{"key": "notify_webhook", "type": "webhook", "config": map[string]any{"url": sink.URL, "method": "POST"}}}})
-	if _, err := db.ExecContext(ctx, `UPDATE workflows SET definition_json=? WHERE id=1`, definition); err != nil {
+	workflowID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO rules(tenant_id,name,event_type,priority,condition_json,workflow_id) VALUES(1,?,?,1,'{"logic":"AND","conditions":[]}',?)`, eventType, eventType, workflowID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +89,7 @@ func TestEventToWebhookAndConcurrentDedup(t *testing.T) {
 	api := httptest.NewServer(httptransport.NewServer(":0", ingestor, store, store, cache).Handler)
 	defer api.Close()
 	eventID := fmt.Sprintf("it-%d", time.Now().UnixNano())
-	request := dto.IngestEventRequest{TenantCode: "acme", Source: "integration", EventType: "order.timeout", EventID: eventID, BusinessKey: eventID, OccurredAt: time.Now().UTC().Format(time.RFC3339), Payload: map[string]any{"amount": 6999, "order_id": eventID}}
+	request := dto.IngestEventRequest{TenantCode: "acme", Source: "integration", EventType: eventType, EventID: eventID, BusinessKey: eventID, OccurredAt: time.Now().UTC().Format(time.RFC3339), Payload: map[string]any{"amount": 6999, "order_id": eventID}}
 	first := postEvent(t, api.URL, request)
 	second := postEvent(t, api.URL, request)
 	if first.EventID != second.EventID {

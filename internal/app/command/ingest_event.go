@@ -239,7 +239,19 @@ func (c *IngestEventCommand) buildRunPlans(ctx context.Context, evt domainevent.
 		if workflowDefinition.TenantID != evt.TenantID || workflowDefinition.Status != "active" {
 			continue
 		}
-		plans = append(plans, workflowengine.BuildRunPlan(evt, matchedRule, workflowDefinition))
+		if err := workflowDefinition.Definition.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid stored workflow: %w", err)
+		}
+		for _, node := range workflowDefinition.Definition.Nodes {
+			if len(node.DependsOn) > 0 {
+				return nil, fmt.Errorf("DAG execution requires scheduler upgrade E3")
+			}
+		}
+		plan, err := workflowengine.BuildRunPlan(evt, matchedRule, workflowDefinition)
+		if err != nil {
+			return nil, err
+		}
+		plans = append(plans, plan)
 		if matchedRule.StopOnMatch {
 			break
 		}

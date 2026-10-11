@@ -101,6 +101,10 @@ func main() {
 		log.Printf("applied %s (%d statements)", name, len(statements))
 	}
 	if webhookURL := os.Getenv("SEED_WEBHOOK_URL"); webhookURL != "" {
+		// Publish a new demo version instead of mutating an immutable definition.
+		if cfg.Environment != "docker" && cfg.Environment != "dev" {
+			log.Fatal("demo seed is development-only")
+		}
 		definition, err := json.Marshal(map[string]any{
 			"nodes": []map[string]any{{
 				"key": "notify_webhook", "type": "webhook",
@@ -110,10 +114,10 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if _, err := conn.ExecContext(ctx, `
-UPDATE workflows SET definition_json = ?
-WHERE tenant_id = (SELECT id FROM tenants WHERE code = 'acme')
-  AND name = 'high-value-order-timeout' AND version = 1`, definition); err != nil {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workflows(tenant_id,name,version,status,definition_json) SELECT id,'high-value-order-timeout',2,'active',? FROM tenants WHERE code='acme' ON DUPLICATE KEY UPDATE id=id`, definition); err != nil {
+			log.Fatal(err)
+		}
+		if _, err := conn.ExecContext(ctx, `UPDATE rules r JOIN tenants t ON t.id=r.tenant_id JOIN workflows old ON old.id=r.workflow_id JOIN workflows w ON w.tenant_id=r.tenant_id AND w.name='high-value-order-timeout' AND w.version=2 SET r.workflow_id=w.id WHERE t.code='acme' AND r.name='order-timeout-high-value' AND old.name='high-value-order-timeout' AND old.version=1`); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -142,27 +146,39 @@ func loadStatements(path string) ([]string, error) {
 	defer file.Close()
 
 	var builder strings.Builder
+	var statements []string
+	delimiter := ";"
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
+		if strings.HasPrefix(line, "DELIMITER ") {
+			if strings.TrimSpace(builder.String()) != "" {
+				return nil, fmt.Errorf("delimiter changed mid-statement")
+			}
+			delimiter = strings.TrimSpace(strings.TrimPrefix(line, "DELIMITER "))
+			if delimiter == "" {
+				return nil, fmt.Errorf("empty delimiter")
+			}
+			continue
+		}
 		builder.WriteString(line)
 		builder.WriteString("\n")
+		if strings.HasSuffix(line, delimiter) {
+			statement := strings.TrimSpace(builder.String())
+			statement = strings.TrimSuffix(statement, delimiter)
+			statements = append(statements, strings.TrimSpace(statement))
+			builder.Reset()
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	rawParts := strings.Split(builder.String(), ";")
-	statements := make([]string, 0, len(rawParts))
-	for _, raw := range rawParts {
-		stmt := strings.TrimSpace(raw)
-		if stmt == "" {
-			continue
-		}
-		statements = append(statements, stmt)
+	if strings.TrimSpace(builder.String()) != "" {
+		return nil, fmt.Errorf("unterminated migration statement")
 	}
 	if len(statements) == 0 {
 		return nil, fmt.Errorf("no migration statements found in %s", path)
