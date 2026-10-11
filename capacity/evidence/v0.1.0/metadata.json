@@ -1,0 +1,46 @@
+{
+  "limits": "historical short single-host regression workload, not saturation, soak or v0.1.1 capacity",
+  "measurement_release": "v0.1.0",
+  "platform": "Windows 11 / Docker Desktop Linux containers (linux/amd64)",
+  "privacy": "allowlisted numeric samples and run fields; no tokens, DSNs, ports, container IDs or logs",
+  "project": "event-workflow-platform",
+  "schema_version": 1,
+  "source_commit": "58326ec93c088f1e64f7ce8b89faff96c010b1c8",
+  "source_commit_basis": "historical report; original harness did not record HEAD",
+  "versions": {
+    "compose": "5.5.1",
+    "docker": "29.8.2",
+    "go": "1.27.2",
+    "mysql": "8.4.11"
+  },
+  "workload_lock": {
+    "expected_payloads": 86,
+    "load_generator": {
+      "image": "grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d"
+    },
+    "schema_version": 1,
+    "selection": {
+      "event_types": [
+        "check_run",
+        "check_suite",
+        "code_scanning_alert",
+        "deployment",
+        "issues",
+        "pull_request",
+        "push"
+      ],
+      "include_suffix": ".json"
+    },
+    "service_images": {
+      "mysql": "mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242",
+      "redis": "redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+    },
+    "source": {
+      "archive": "https://github.com/octokit/webhooks/archive/aa80c24a3f55354465b8b1438d33dd5602956d0d.tar.gz",
+      "archive_sha256": "d2151f7b6fa54ea6711c8ed781e5f17f05d916eaf92724b74ee844d56e1244f5",
+      "commit": "aa80c24a3f55354465b8b1438d33dd5602956d0d",
+      "license": "MIT",
+      "repository": "https://github.com/octokit/webhooks"
+    }
+  }
+}

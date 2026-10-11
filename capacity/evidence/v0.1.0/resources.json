@@ -1,0 +1,80 @@
+{
+  "groups": {
+    "normal": {
+      "api": {
+        "cpu_median_percent": 3.18,
+        "cpu_peak_percent": 19.5,
+        "memory_median_mib": 14.89,
+        "memory_peak_mib": 32.29,
+        "samples": 135
+      },
+      "mysql": {
+        "cpu_median_percent": 13.75,
+        "cpu_peak_percent": 35.07,
+        "memory_median_mib": 480.3,
+        "memory_peak_mib": 541.2,
+        "samples": 135
+      },
+      "redis": {
+        "cpu_median_percent": 0.71,
+        "cpu_peak_percent": 5.17,
+        "memory_median_mib": 9.363,
+        "memory_peak_mib": 18.76,
+        "samples": 135
+      },
+      "webhook-sink": {
+        "cpu_median_percent": 0.33,
+        "cpu_peak_percent": 4.2,
+        "memory_median_mib": 6.98,
+        "memory_peak_mib": 10.41,
+        "samples": 135
+      },
+      "worker": {
+        "cpu_median_percent": 4.67,
+        "cpu_peak_percent": 17.28,
+        "memory_median_mib": 14.35,
+        "memory_peak_mib": 25.49,
+        "samples": 135
+      }
+    },
+    "recovery": {
+      "api": {
+        "cpu_median_percent": 0.03,
+        "cpu_peak_percent": 12.13,
+        "memory_median_mib": 16.835,
+        "memory_peak_mib": 24.47,
+        "samples": 46
+      },
+      "mysql": {
+        "cpu_median_percent": 11.73,
+        "cpu_peak_percent": 19.48,
+        "memory_median_mib": 473.65,
+        "memory_peak_mib": 488.6,
+        "samples": 46
+      },
+      "redis": {
+        "cpu_median_percent": 0.695,
+        "cpu_peak_percent": 3.72,
+        "memory_median_mib": 12.045,
+        "memory_peak_mib": 15.95,
+        "samples": 46
+      },
+      "webhook-sink": {
+        "cpu_median_percent": 0.30000000000000004,
+        "cpu_peak_percent": 4.78,
+        "memory_median_mib": 5.166,
+        "memory_peak_mib": 8.734,
+        "samples": 46
+      },
+      "worker": {
+        "cpu_median_percent": 4.375,
+        "cpu_peak_percent": 11.62,
+        "memory_median_mib": 9.119,
+        "memory_peak_mib": 19.05,
+        "samples": 36
+      }
+    }
+  },
+  "median_method": "statistics.median; workers are per-container samples",
+  "schema_version": 1
+}

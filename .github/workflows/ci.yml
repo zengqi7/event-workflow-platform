@@ -8,6 +8,21 @@ permissions:
   contents: read
 
 jobs:
+  benchmark-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Audit and package sanitized historical evidence
+        run: |
+          python3 -m unittest discover -s capacity -p 'test_*.py'
+          python3 capacity/evidence.py pack capacity/evidence/v0.1.0 dist/benchmark-evidence.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: benchmark-evidence
+          path: dist/benchmark-evidence.tar.gz*
+          if-no-files-found: error
+          retention-days: 90
+
   test:
     runs-on: ubuntu-24.04
     services:
