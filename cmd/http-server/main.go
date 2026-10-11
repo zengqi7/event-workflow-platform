@@ -19,6 +19,7 @@ import (
 	mysqlrepo "event-workflow-platform/internal/repo/mysql"
 	redisrepo "event-workflow-platform/internal/repo/redis"
 	httptransport "event-workflow-platform/internal/transport/http"
+	"event-workflow-platform/migrations"
 )
 
 func main() {
@@ -43,6 +44,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	check, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err = migrations.Verify(check, db)
+	cancel()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,

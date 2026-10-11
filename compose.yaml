@@ -46,6 +46,7 @@ services:
     environment:
       <<: *app-environment
       SEED_WEBHOOK_URL: "http://webhook-sink:18081/receive"
+      MYSQL_DSN: "root:${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}@tcp(mysql:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC"
     depends_on:
       mysql:
         condition: service_healthy

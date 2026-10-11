@@ -17,10 +17,14 @@ The event identity key is `(tenant_id, source, event_id)`. The business dedup ke
 
 ## Delivery transaction
 
-A worker selects eligible Outbox rows with `FOR UPDATE SKIP LOCKED`, assigns a random lease token, and marks the task/run running in one transaction. After delivery, `FinishDelivery` locks the Outbox row and verifies the lease token before atomically updating task, Outbox, and run status.
+A worker gives ready tenants round-robin opportunities under a durable scheduler cursor, enforces tenant live-lease/rate limits, then locks run -> outbox -> task using SKIP LOCKED. A claim increments the total attempt count, sets a lease token and marks task/run running. Settlement uses the same run -> outbox -> task order and requires the matching unexpired lease. All-parent dependency completion unlocks blocked tasks once; failure skips descendants without canceling independent roots. Workflow JSON is immutable source data; runtime edges are execution state.
 
 A processing row whose lease expires can be reclaimed. This protects availability after worker crashes and fences late completion from the old worker.
 
 ## Trust boundary
 
-The V1 API is intended behind an internal gateway. Tenant selectors are not authentication credentials. Public deployment requires gateway authentication and authorization or the planned API-key/RBAC module.
+Business routes authenticate database API keys carrying tenant, subject, scopes and expiry, checked on every request. Tenant selectors cannot override that identity. Privileged key issuance uses a database-access operator CLI. TLS and private operations endpoints remain deployment requirements; no SSO/RBAC management UI is provided.
+
+Production Webhooks require exact hosts, HTTPS 443 and tenant secret references. DNS answers are checked and dialing uses the checked address; redirects/proxy/private IPs are refused. Automatic retries retain one delivery key, while audited replay starts a new run and new keys. The remote receiver owns effect idempotency. Traces propagate across durable Outbox and HTTP; enabling an OTLP endpoint activates export.
+
+Migration application is separate from serving. Dirty/checksum/newer-schema checks block incompatible startup. See release-and-operations.md for backup, upgrade and restore boundaries.

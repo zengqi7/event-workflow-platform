@@ -23,6 +23,14 @@ import (
 )
 
 func isolatedWorkflowDB(t testing.TB) *sql.DB {
+	db := emptyWorkflowDB(t)
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func emptyWorkflowDB(t testing.TB) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("INTEGRATION_MYSQL_DSN")
 	if dsn == "" {
@@ -48,28 +56,6 @@ func isolatedWorkflowDB(t testing.TB) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close(); admin.Exec("DROP DATABASE `" + name + "`"); admin.Close() })
-	files, err := migrations.Files.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		raw, err := migrations.Files.ReadFile(file.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		statements, err := migrations.Statements(string(raw))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, statement := range statements {
-			if _, err := db.Exec(statement); err != nil {
-				t.Fatalf("%s: %v", file.Name(), err)
-			}
-		}
-	}
 	return db
 }
 

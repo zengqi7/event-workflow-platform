@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	mysqlrepo "event-workflow-platform/internal/repo/mysql"
+	"event-workflow-platform/migrations"
 	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -30,6 +31,9 @@ func main() {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := migrations.Verify(ctx, db); err != nil {
+		log.Fatal(err)
+	}
 	store := mysqlrepo.NewStore(db)
 	if *revoke != 0 {
 		if err := store.RevokeKey(ctx, *tenant, *revoke, *subject); err != nil {
