@@ -22,7 +22,7 @@ import (
 	driver "github.com/go-sql-driver/mysql"
 )
 
-func isolatedWorkflowDB(t *testing.T) *sql.DB {
+func isolatedWorkflowDB(t testing.TB) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("INTEGRATION_MYSQL_DSN")
 	if dsn == "" {
@@ -73,7 +73,7 @@ func isolatedWorkflowDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func createDAGRun(t *testing.T, db *sql.DB, nodes []workflow.Node) (*mysqlrepo.Store, uint64) {
+func createDAGRun(t testing.TB, db *sql.DB, nodes []workflow.Node) (*mysqlrepo.Store, uint64) {
 	t.Helper()
 	ctx := context.Background()
 	raw, _, err := (workflow.Definition{Nodes: nodes}).Snapshot()

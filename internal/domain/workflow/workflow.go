@@ -151,6 +151,7 @@ type Task struct {
 	TaskType       string
 	Status         string
 	RetryCount     int
+	AttemptCount   int
 	MaxRetry       int
 	LastError      string
 	ScheduledAt    time.Time

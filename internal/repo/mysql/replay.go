@@ -13,6 +13,7 @@ import (
 
 	domainrepo "event-workflow-platform/internal/domain/repository"
 	"event-workflow-platform/internal/domain/workflow"
+	"event-workflow-platform/internal/infra"
 	"event-workflow-platform/internal/service/auth"
 )
 
@@ -116,7 +117,7 @@ func (s *Store) ReplayRun(ctx context.Context, sourceID uint64, requestKey, reas
 			return ReplayResult{}, err
 		}
 		taskIDs[node.Key] = taskID
-		payload, err := json.Marshal(map[string]any{"tenant_id": p.TenantID, "event_id": eventID, "run_id": newID, "task_id": taskID, "task_type": node.Type, "config": node.Config, "trace_id": traceID, "payload": json.RawMessage(eventPayload), "source_event_id": sourceEventID, "event_type": eventType})
+		payload, err := json.Marshal(map[string]any{"tenant_id": p.TenantID, "event_id": eventID, "run_id": newID, "task_id": taskID, "task_type": node.Type, "config": node.Config, "trace_id": traceID, "payload": json.RawMessage(eventPayload), "source_event_id": sourceEventID, "event_type": eventType, "trace_context": infra.TraceCarrier(ctx)})
 		if err != nil {
 			return ReplayResult{}, err
 		}

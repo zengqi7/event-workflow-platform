@@ -8,6 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"strconv"
@@ -28,7 +32,14 @@ func (e *WebhookExecutor) Execute(ctx context.Context, method, url string, body 
 	return e.ExecuteDelivery(ctx, method, url, body, 0, "")
 }
 
-func (e *WebhookExecutor) ExecuteDelivery(ctx context.Context, method, url string, body map[string]any, tenantID uint64, ref string) error {
+func (e *WebhookExecutor) ExecuteDelivery(ctx context.Context, method, url string, body map[string]any, tenantID uint64, ref string) (result error) {
+	ctx, span := otel.Tracer("event-workflow").Start(ctx, "webhook.delivery", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+	defer func() {
+		if result != nil {
+			span.SetStatus(codes.Error, "webhook delivery failed")
+		}
+	}()
 	if err := e.policy.ValidateURL(url); err != nil {
 		return err
 	}
@@ -45,6 +56,7 @@ func (e *WebhookExecutor) ExecuteDelivery(ctx context.Context, method, url strin
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 	if key, ok := body["idempotency_key"].(string); ok {
 		req.Header.Set("Idempotency-Key", key)
 	}

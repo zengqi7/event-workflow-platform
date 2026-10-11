@@ -16,6 +16,9 @@ import (
 	domainrepo "event-workflow-platform/internal/domain/repository"
 	"event-workflow-platform/internal/infra"
 	"event-workflow-platform/internal/service/auth"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ingestExecutor interface {
@@ -44,12 +47,21 @@ func newServer(addr string, ingestor ingestExecutor, inspector domainrepo.Inspec
 
 	return &http.Server{
 		Addr:              addr,
-		Handler:           loggingMiddleware(mux),
+		Handler:           tracingMiddleware(loggingMiddleware(mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+}
+
+func tracingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		ctx, span := otel.Tracer("event-workflow").Start(ctx, "http."+r.Method, trace.WithSpanKind(trace.SpanKindServer))
+		defer span.End()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func healthzHandler(w http.ResponseWriter, _ *http.Request) {

@@ -17,6 +17,7 @@ import (
 	"event-workflow-platform/internal/service/dedup"
 	"event-workflow-platform/internal/service/ruleeval"
 	"event-workflow-platform/internal/service/workflowengine"
+	"go.opentelemetry.io/otel"
 )
 
 type IngestEventCommand struct {
@@ -32,6 +33,8 @@ func NewIngestEventCommand(store domainrepo.Store, cache domainrepo.Cache) *Inge
 }
 
 func (c *IngestEventCommand) Execute(ctx context.Context, req dto.IngestEventRequest) (dto.IngestEventResponse, error) {
+	ctx, span := otel.Tracer("event-workflow").Start(ctx, "event.ingest")
+	defer span.End()
 	if err := validateIngestEventRequest(req); err != nil {
 		return dto.IngestEventResponse{}, fmt.Errorf("%w: %v", domainrepo.ErrInvalidRequest, err)
 	}

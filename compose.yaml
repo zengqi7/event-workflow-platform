@@ -4,6 +4,7 @@ x-app-environment: &app-environment
   APP_ENV: docker
   MYSQL_DSN: "event_app:${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC"
   REDIS_ADDR: redis:6379
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 services:
   mysql:
@@ -76,6 +77,15 @@ services:
       <<: *app-environment
       WEBHOOK_ALLOWED_HOSTS: webhook-sink
       WEBHOOK_ALLOW_DEVELOPMENT: "true"
+      WORKER_METRICS_ADDR: 0.0.0.0:9091
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    ports:
+      - "127.0.0.1:${WORKER_METRICS_PORT:-9091}:9091"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9091/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     depends_on:
       migrate:
         condition: service_completed_successfully
