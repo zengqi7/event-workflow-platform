@@ -15,6 +15,10 @@ import (
 	"event-workflow-platform/internal/domain/workflow"
 	"event-workflow-platform/internal/infra"
 	"event-workflow-platform/internal/service/notifier"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Runner struct {
@@ -53,7 +57,23 @@ func (r *Runner) PollOnce(ctx context.Context, limit int) error {
 	return errors.Join(failures...)
 }
 
-func (r *Runner) handleOutbox(ctx context.Context, item outbox.Event) error {
+func (r *Runner) handleOutbox(ctx context.Context, item outbox.Event) (result error) {
+	carrier := propagation.MapCarrier{}
+	if raw, ok := item.Payload["trace_context"].(map[string]any); ok {
+		for key, value := range raw {
+			if text, ok := value.(string); ok {
+				carrier[key] = text
+			}
+		}
+	}
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+	ctx, span := otel.Tracer("event-workflow").Start(ctx, "workflow.task", trace.WithSpanKind(trace.SpanKindConsumer))
+	defer span.End()
+	defer func() {
+		if result != nil {
+			span.SetStatus(codes.Error, "task delivery or settlement failed")
+		}
+	}()
 	taskID, runID, body, url, method, parseErr := parseOutboxPayload(item.Payload)
 	if parseErr != nil {
 		id, _ := strconv.ParseUint(item.AggregateID, 10, 64)
@@ -98,7 +118,7 @@ func (r *Runner) handleOutbox(ctx context.Context, item outbox.Event) error {
 	infra.IncWebhookFailure()
 	status := "failed"
 	next := time.Time{}
-	if task.RetryCount+1 < task.MaxRetry {
+	if task.AttemptCount < task.MaxRetry {
 		status = "retrying"
 		next = time.Now().UTC().Add(backoff(task.RetryCount))
 	}

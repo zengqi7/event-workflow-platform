@@ -17,6 +17,7 @@ import (
 	"event-workflow-platform/internal/domain/rule"
 	"event-workflow-platform/internal/domain/tenant"
 	"event-workflow-platform/internal/domain/workflow"
+	"event-workflow-platform/internal/infra"
 	"event-workflow-platform/internal/service/auth"
 )
 
@@ -322,6 +323,7 @@ INSERT INTO outbox_events (
 				"payload":         evt.Payload,
 				"source_event_id": evt.EventID,
 				"event_type":      evt.EventType,
+				"trace_context":   infra.TraceCarrier(ctx),
 			})
 			if err != nil {
 				return domainrepo.PersistResult{}, err
@@ -443,7 +445,7 @@ func (s *Store) FinishDelivery(ctx context.Context, item outbox.Event, task work
 
 func (s *Store) GetTaskByID(ctx context.Context, taskID uint64) (workflow.Task, error) {
 	const query = `
-SELECT id, run_id, node_key, task_type, status, retry_count, max_retry, COALESCE(last_error, ''), scheduled_at, started_at, finished_at, idempotency_key
+SELECT id, run_id, node_key, task_type, status, retry_count, attempt_count, max_retry, COALESCE(last_error, ''), scheduled_at, started_at, finished_at, idempotency_key
 FROM workflow_tasks
 WHERE id = ?
 LIMIT 1`
@@ -456,6 +458,7 @@ LIMIT 1`
 		&task.TaskType,
 		&task.Status,
 		&task.RetryCount,
+		&task.AttemptCount,
 		&task.MaxRetry,
 		&task.LastError,
 		&task.ScheduledAt,
