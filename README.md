@@ -12,7 +12,8 @@
 | [支持矩阵](docs/support-matrix.md) | Go、数据库、Docker、工具版本及平台验证边界 |
 | [容量报告](docs/capacity/v0.1.0.md) | 历史固定负载的吞吐、P95、恢复和资源数据 |
 | [可审计测试输入](capacity/evidence/v0.1.0) | 脱敏样本、汇总、元数据和 SHA-256；可机器复算 |
-| [发行验证](docs/release-verification.md) | 严格验证流程；每次完成结果见 Release notes |
+| [v0.1.1 发行验证报告](docs/release-verification-v0.1.1.md) | 7/7 checksum/provenance、8/8 Release 资产验证、Windows/Linux 运行结果与限制 |
+| [发行验证流程](docs/release-verification.md) | 签名 tag、严格身份检查、Draft 门禁和不可变发布 |
 
 ## 已实现能力
 
