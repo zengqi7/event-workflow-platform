@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
 	"event-workflow-platform/internal/infra"
+	"event-workflow-platform/migrations"
 )
 
 func main() {
@@ -22,6 +25,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := migrations.Verify(ctx, db); err != nil {
+		log.Fatal(err)
+	}
 
 	if err := db.Ping(); err != nil {
 		log.Fatal(err)

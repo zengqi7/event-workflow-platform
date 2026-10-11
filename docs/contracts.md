@@ -2,12 +2,12 @@
 
 ## Current baseline
 
-The v0.1 API trusts a gateway for authorization. Tenant query/body fields are not credentials. Do not expose this baseline publicly. E1 replaces this boundary with credential-derived tenancy.
+Business routes require database API keys; tenant query/body fields cannot override credential-derived tenancy. Scopes and audit identify admitted operations. Health/metrics must be on a protected operations network.
 
 ## State machines and invariants
 
 - Event: received or dedup_skipped. Unique (tenant, source, event_id); conflicting content returns 409. The dedup claim and event/tasks/outbox commit in one transaction.
-- Run: pending -> running -> success/failed. A successful run requires all tasks to succeed. The baseline executes a flat node collection; E2/E3 add validated DAGs.
+- Run: pending -> running -> success/failed. A successful run requires all tasks to succeed. Static validated DAG dependencies unlock only after every parent succeeds; failed descendants are skipped.
 - Task: pending -> running -> success, or retrying -> running, or failed. Outbox: pending -> processing -> published/failed; expired leases can be reclaimed.
 - Delivery is at-least-once. A network timeout after remote acceptance can produce duplicates; receivers must honor Idempotency-Key. A lease token fences local settlement, not external effects.
 - Batch is not atomic: 202 means every item accepted, 207 includes per-item failures. Never resubmit successful items with a new event identity.

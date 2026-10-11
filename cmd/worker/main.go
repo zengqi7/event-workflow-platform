@@ -20,6 +20,7 @@ import (
 	mysqlrepo "event-workflow-platform/internal/repo/mysql"
 	"event-workflow-platform/internal/service/notifier"
 	workertransport "event-workflow-platform/internal/transport/worker"
+	"event-workflow-platform/migrations"
 )
 
 func main() {
@@ -46,6 +47,12 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	check, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err = migrations.Verify(check, db)
+	cancel()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	store := mysqlrepo.NewStore(db)
 	policy := notifier.Policy{AllowedHosts: strings.FieldsFunc(os.Getenv("WEBHOOK_ALLOWED_HOSTS"), func(r rune) bool { return r == ',' })}

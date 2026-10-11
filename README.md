@@ -2,111 +2,52 @@
 
 [![CI](https://github.com/zengqi7/event-workflow-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/zengqi7/event-workflow-platform/actions/workflows/ci.yml)
 
-面向企业内部订单、风控和运维系统的多租户事件接入与异步工作流平台。平台解决上游重复投递、同一业务事件重复触发、通知失败难追踪，以及业务写入与异步任务双写不一致的问题。
+面向订单与运维系统的多租户事件和可靠 Webhook 工作流平台。用于订单超时后通知客服、再通知履约系统等有先后依赖的自动化：上游可安全重试，规则绑定不可变工作流，执行过程可以追踪和审计。
 
-## 核心链路
+## 已实现能力
 
-```text
-HTTP event -> transport idempotency -> business dedup -> rule evaluation
-           -> workflow run/task + transactional outbox
-           -> leased worker -> webhook -> atomic status settlement
-```
-
-- **多租户接入**：事件、规则、工作流、执行记录和查询均带租户边界。
-- **两层防重**：`tenant + source + event_id` 保证接口幂等，相同键但不同内容返回 `409`；`tenant + event_type + business_key + minute bucket` 抑制业务重复。
-- **并发一致性**：MySQL 唯一约束在事务内裁决并发去重，Redis 只作为幂等辅助，不作为提交事实。
-- **规则与工作流**：按优先级匹配 JSON 条件，命中后生成 run/task。
-- **Transactional Outbox**：事件、run/task 和 Outbox 在同一事务提交。
-- **可靠异步执行**：Worker 使用租约、`SKIP LOCKED`、重试退避和 fencing token；任务、Outbox、run 状态在同一事务结算。
-- **Webhook**：传递原始业务 payload，并携带稳定的 `Idempotency-Key`。投递语义是 at-least-once，接收方需按该键幂等。
-- **可观测性**：`/healthz`、`/readyz`、Prometheus 文本指标和结构化基础日志。
+- 数据库 API Key 绑定 tenant、subject、scope、到期与吊销；请求配额、任务配额和审计。
+- tenant/source/event_id 接口幂等，内容冲突返回 409。业务去重另按业务键和分钟窗口处理；MySQL 是裁决事实源，Redis 为辅助缓存。
+- 工作流 JSON 是唯一事实源；发布验证 DAG、版本不可变，run 保存快照与摘要。依赖边保存状态，所有父任务成功后原子解锁。
+- 事件、run、task 和 Outbox 同事务。Worker 租约、fencing、SKIP LOCKED，统一锁顺序结算；崩溃消耗尝试预算。
+- retry 保留投递键；人工 replay 经审计创建新 run、新代次、新投递键，仅支持可信 runtime 快照。
+- 生产 Webhook 默认拒绝，要求 HTTPS 443、精确主机白名单及租户 Secret 引用；防 DNS rebinding、私网、重定向和代理。HMAC 签名带时间戳。
+- 数据库 round-robin 调度、租户执行配额、Worker 并发、Prometheus 指标及可选 OTLP/HTTP 追踪。
 
 ## 快速启动
 
-要求 Docker Compose v2。复制环境变量模板并替换密码：
+需要 Docker Compose v2。复制模板后设置随机数据库密码。Compose 是本机开发配置，显式允许本地无签名 Webhook；生产按安全文档重新配置。
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build -d
 docker compose ps
-```
-
-Compose 会启动 MySQL 8.4、Redis 7.4、迁移任务、API、Worker 和本地 Webhook sink。默认只绑定本机：
-
-- API: `http://127.0.0.1:8080`
-- Webhook sink: `http://127.0.0.1:18081`
-- MySQL: `127.0.0.1:3306`
-- Redis: `127.0.0.1:6379`
-
-验证完整链路：
-
-```powershell
+$keyOutput = docker compose run --rm --no-deps --entrypoint key api -tenant 1 -subject local-demo -scopes events:write,state:read -ttl 24h
+$env:EVENT_API_TOKEN = ($keyOutput | Where-Object { $_ -like 'token=*' }) -replace '^token=', ''
 .\scripts\smoke-test.ps1
-Invoke-RestMethod http://127.0.0.1:8080/metrics
 ```
 
-停止服务：
+API：http://127.0.0.1:8080，sink：http://127.0.0.1:18081，Worker 指标：http://127.0.0.1:9091/metrics。端口可通过环境变量调整。停止使用 `docker compose down`，保留数据库卷。
 
-```powershell
-docker compose down
-```
+## API 与开发
 
-只有明确需要清空数据时才附加 `-v`。
+业务接口要求 Bearer API Key；租户来自凭证，可省略 tenant 字段。
 
-## API
-
-| Method | Path | Purpose |
+| Method | Path | Scope |
 |---|---|---|
-| `POST` | `/api/v1/events` | 接入单个事件 |
-| `POST` | `/api/v1/events/batch` | 批量接入，最多 100 条 |
-| `GET` | `/api/v1/events?tenant_id=1` | 查询租户事件 |
-| `GET` | `/api/v1/workflow-runs?tenant_id=1` | 查询 run |
-| `GET` | `/api/v1/workflow-tasks?tenant_id=1` | 查询 task |
-| `GET` | `/api/v1/outbox-events?tenant_id=1` | 查询 Outbox |
-| `GET` | `/healthz`, `/readyz`, `/metrics` | 健康、依赖和指标 |
+| POST | /api/v1/events、/api/v1/events/batch | events:write |
+| GET | /api/v1/events、/api/v1/workflow-runs、/api/v1/workflow-tasks、/api/v1/outbox-events | state:read |
+| POST | /api/v1/workflows | workflows:write |
+| POST | /api/v1/workflow-runs/{id}/replay | runs:replay |
 
-示例请求：
+完整请求见 [OpenAPI](docs/openapi.json)，定义见 [workflow-versions](docs/workflow-versions.md)。Go 版本以 go.mod 为准；使用 database/sql，不依赖 Ent。测试：`go test ./...`、`go vet ./...`；设置独立测试库 INTEGRATION_MYSQL_DSN 和 INTEGRATION_REDIS_ADDR 后运行 `go test -race -tags=integration ./...`。跨平台入口见 [local-run](docs/local-run.md)。
 
-```json
-{
-  "tenant_code": "acme",
-  "source": "order-service",
-  "event_type": "order.timeout",
-  "event_id": "evt-20261010-0001",
-  "business_key": "order-10001",
-  "occurred_at": "2026-10-10T10:30:00Z",
-  "payload": {
-    "order_id": "10001",
-    "amount": 6999
-  }
-}
-```
+## 边界与运维
 
-初始迁移包含 `acme` 演示租户、高价值超时规则和 Webhook 工作流。
+投递为 at-least-once，接收成功但提交前崩溃仍可重投，接收方必须按 Idempotency-Key 幂等。DAG 只支持静态 Webhook 依赖，无动态条件、人工审批、定时器或任意脚本。没有 RBAC 管理 UI、SSO、自动 retention 或已验证的生产 SLO。
 
-## 本地开发
+服务启动检查迁移，不自动执行 DDL。正式上线需要 TLS、Secret 管理、告警、备份恢复演练与容量验证。
 
-```powershell
-.\scripts\test.ps1
-$env:MYSQL_DSN='event_app:<MYSQL_PASSWORD>@tcp(127.0.0.1:<MYSQL_PORT>)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC'
-$env:REDIS_ADDR='127.0.0.1:6379'
-go run ./cmd/migrate
-go run ./cmd/http-server
-go run ./cmd/worker
-```
-
-环境变量见 [.env.example](.env.example)，架构和可靠性决策见 [docs/architecture.md](docs/architecture.md)。
-
-## 一致性边界
-
-- 数据库唯一约束是幂等与去重的最终事实来源。
-- Worker 崩溃后，超时租约可被其他实例接管；旧实例不能用过期 token 结算。
-- Webhook 成功但数据库提交前进程崩溃会导致重投，这是 at-least-once 的正常边界。
-- V1 面向可信内网，尚未提供 API Key/RBAC 管理面；不要将 API 直接暴露到公网。生产接入应置于认证网关之后。
-- 工作流节点当前按扁平任务集合执行，不支持 DAG 条件分支；复杂分支属于后续版本。
-
-## 测试
-
-- 单元测试：请求校验、规则匹配、幂等/去重命令、HTTP、Worker 成功与重试。
-- 集成测试：真实 MySQL/Redis 下验证幂等、并发去重、Outbox 到 Webhook 及三类状态一致性。
-- GitHub Actions：`go test -race`、`go vet`、集成测试和容器构建。
+- [架构](docs/architecture.md) / [认证](docs/authentication.md) / [DAG](docs/dag-scheduler.md)
+- [Replay 与出站安全](docs/replay-and-webhook-security.md) / [指标、故障、Benchmark](docs/operations-and-benchmarks.md)
+- [发布、升级、恢复与兼容政策](docs/release-and-operations.md)
