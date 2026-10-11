@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -10,12 +9,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
 	"event-workflow-platform/internal/infra"
+	"event-workflow-platform/migrations"
 )
 
 func main() {
@@ -139,49 +138,9 @@ func waitForDatabase(db *sql.DB, timeout time.Duration) error {
 }
 
 func loadStatements(path string) ([]string, error) {
-	file, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-
-	var builder strings.Builder
-	var statements []string
-	delimiter := ";"
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "--") {
-			continue
-		}
-		if strings.HasPrefix(line, "DELIMITER ") {
-			if strings.TrimSpace(builder.String()) != "" {
-				return nil, fmt.Errorf("delimiter changed mid-statement")
-			}
-			delimiter = strings.TrimSpace(strings.TrimPrefix(line, "DELIMITER "))
-			if delimiter == "" {
-				return nil, fmt.Errorf("empty delimiter")
-			}
-			continue
-		}
-		builder.WriteString(line)
-		builder.WriteString("\n")
-		if strings.HasSuffix(line, delimiter) {
-			statement := strings.TrimSpace(builder.String())
-			statement = strings.TrimSuffix(statement, delimiter)
-			statements = append(statements, strings.TrimSpace(statement))
-			builder.Reset()
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	if strings.TrimSpace(builder.String()) != "" {
-		return nil, fmt.Errorf("unterminated migration statement")
-	}
-	if len(statements) == 0 {
-		return nil, fmt.Errorf("no migration statements found in %s", path)
-	}
-	return statements, nil
+	return migrations.Statements(string(raw))
 }

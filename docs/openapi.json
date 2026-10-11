@@ -8,7 +8,7 @@
   "paths": {
     "/api/v1/workflows": {
       "post": {
-        "description": "Publish an immutable workflow version; workflows:write required. Dependent nodes may only be draft until E3.",
+        "description": "Publish an immutable workflow version; workflows:write required. Dependencies form a DAG and execute after all parents succeed.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {
           "type": "object", "additionalProperties": false, "required": ["name", "version", "status", "definition"],
           "properties": {
