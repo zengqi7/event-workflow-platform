@@ -2,7 +2,8 @@ param(
     [string]$Repo = 'zengqi7/event-workflow-platform',
     [string]$Tag = 'v0.1.0',
     [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedSourceSha,
-    [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedWorkflowSha,
+    # The signer digest is the workflow's commit SHA, not the workflow file blob.
+    [Parameter(Mandatory)][Alias('ExpectedWorkflowSha')][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedSignerSha,
     [Parameter(Mandatory)][string]$Destination,
     [string]$GhCommand = 'gh'
 )
@@ -32,9 +33,9 @@ foreach ($archive in $archives) {
     $actual = (Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($checksumMap[$archive.Name] -ne $actual) { throw "checksum mismatch: $($archive.Name)" }
     $attestationPath = Join-Path $destinationPath "$($archive.Name).attestation.json"
-    & $gh attestation verify $archive.FullName --repo $Repo --signer-workflow "$Repo/.github/workflows/release.yml" --signer-digest $ExpectedWorkflowSha --source-digest $ExpectedSourceSha --source-ref "refs/tags/$Tag" --deny-self-hosted-runners --format json | Set-Content -LiteralPath $attestationPath -Encoding utf8
+    & $gh attestation verify $archive.FullName --repo $Repo --signer-workflow "$Repo/.github/workflows/release.yml@refs/tags/$Tag" --signer-digest $ExpectedSignerSha --source-digest $ExpectedSourceSha --source-ref "refs/tags/$Tag" --deny-self-hosted-runners --format json | Set-Content -LiteralPath $attestationPath -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw "provenance verification failed: $($archive.Name)" }
     $evidence += @{ file=$archive.Name; sha256=$actual; attestation=$attestationPath }
 }
-@{ repository=$Repo; tag=$Tag; source_sha=$ExpectedSourceSha; verified_at=(Get-Date).ToUniversalTime().ToString('o'); assets=$evidence } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $destinationPath 'verification-summary.json') -Encoding utf8
+@{ repository=$Repo; tag=$Tag; source_sha=$ExpectedSourceSha; signer_sha=$ExpectedSignerSha; signer_workflow="$Repo/.github/workflows/release.yml@refs/tags/$Tag"; verified_at=(Get-Date).ToUniversalTime().ToString('o'); assets=$evidence } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $destinationPath 'verification-summary.json') -Encoding utf8
 Write-Output "verified six checksums and six GitHub build attestations in $destinationPath"
