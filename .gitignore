@@ -1,4 +1,8 @@
 .env
+data/capacity/
+results/capacity/
+__pycache__/
+*.pyc
 dist/
 data/
 bin/
