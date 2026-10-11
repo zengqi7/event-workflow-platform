@@ -1,5 +1,8 @@
 # Release verification protocol
 
+[v0.1.1 completed report](release-verification-v0.1.1.md) records the published
+immutable release, download verification and exercised runtime scope.
+
 The verifier shipped in v0.1.1 tagged source includes the strict identity fixes.
 [v0.1.0 completed report](release-verification-v0.1.0.md) remains historical:
 its signed tag predates those verifier fixes and its assets were not replaced.
