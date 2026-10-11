@@ -47,7 +47,7 @@ func TestRunnerPollOnceSuccess(t *testing.T) {
 		},
 	}
 
-	runner := NewRunner(store, notifier.NewWebhookExecutor(2*time.Second))
+	runner := NewRunner(store, notifier.NewDevelopmentWebhookExecutor(2*time.Second, "127.0.0.1"))
 	if err := runner.PollOnce(context.Background(), 10); err != nil {
 		t.Fatalf("PollOnce returned error: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestRunnerPollOnceRetry(t *testing.T) {
 		},
 	}
 
-	runner := NewRunner(store, notifier.NewWebhookExecutor(2*time.Second))
+	runner := NewRunner(store, notifier.NewDevelopmentWebhookExecutor(2*time.Second, "127.0.0.1"))
 	if err := runner.PollOnce(context.Background(), 10); err != nil {
 		t.Fatalf("PollOnce returned error: %v", err)
 	}
