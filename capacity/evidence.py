@@ -25,7 +25,7 @@ def read_json(path):
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8", newline="\n")
 
 
 def digest(path):
@@ -136,7 +136,7 @@ def export(args):
     for name, data in zip(FILES, (evidence, summary, resources, metadata)):
         write_json(args.output / name, data)
     (args.output / "checksums.txt").write_text(
-        "".join(f"{digest(args.output / name)}  {name}\n" for name in FILES), encoding="ascii")
+        "".join(f"{digest(args.output / name)}  {name}\n" for name in FILES), encoding="ascii", newline="\n")
     audit(args.output)
 
 
@@ -177,7 +177,7 @@ def pack(root, output):
         with gzip.GzipFile(fileobj=stream, mode="wb", filename="", mtime=0) as compressed:
             compressed.write(buffer.getvalue())
     output.with_name(output.name + ".sha256").write_text(
-        f"{digest(output)}  {output.name}\n", encoding="ascii")
+        f"{digest(output)}  {output.name}\n", encoding="ascii", newline="\n")
 
 
 def main():
