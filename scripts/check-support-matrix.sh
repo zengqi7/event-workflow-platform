@@ -4,7 +4,9 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-[[ "$(tr -d '\r\n' < VERSION)" == "0.1.0" ]]
+version="$(tr -d '\r\n' < VERSION)"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+grep -Fq "release \`v$version\`" docs/support-matrix.md
 grep -Eq '^go 1\.27\.2$' go.mod
 grep -Fq 'FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build' Dockerfile
 grep -Fq 'mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242' compose.yaml

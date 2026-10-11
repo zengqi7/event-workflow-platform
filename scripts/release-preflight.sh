@@ -6,7 +6,7 @@ cd "$root"
 mode="${1:-snapshot}"
 version="$(tr -d '\r\n' < VERSION)"
 
-[[ "$version" == "0.1.0" ]]
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 python -m json.tool docs/openapi.json >/dev/null
 bash scripts/check-support-matrix.sh
 if grep -REq 'uses:[[:space:]]+[^[:space:]]+@v[0-9]' .github/workflows; then
@@ -17,9 +17,10 @@ grep -Fq '@sha256:' Dockerfile
 grep -Fq '@sha256:' compose.yaml
 
 if [[ "$mode" == tag ]]; then
-  [[ "${GITHUB_REF:-}" == "refs/tags/v0.1.0" ]]
-  [[ "${GITHUB_REF_NAME:-}" == "v0.1.0" ]]
-  [[ "$(git rev-list -n 1 v0.1.0)" == "${GITHUB_SHA:-}" ]]
+  [[ "${GITHUB_REF:-}" == "refs/tags/v$version" ]]
+  [[ "${GITHUB_REF_NAME:-}" == "v$version" ]]
+  [[ "$(git rev-list -n 1 "v$version")" == "${GITHUB_SHA:-}" ]]
+  [[ -f "docs/releases/v$version.md" ]]
   git fetch --quiet origin main
   [[ "$(git rev-parse origin/main)" == "${GITHUB_SHA:-}" ]]
 elif [[ "$mode" != snapshot ]]; then

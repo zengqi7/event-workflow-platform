@@ -2,7 +2,7 @@ name: release
 
 on:
   push:
-    tags: ['v0.1.0']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,12 @@ jobs:
         env:
           RELEASE_MODE: ${{ startsWith(github.ref, 'refs/tags/') && 'tag' || 'snapshot' }}
         run: bash scripts/release-preflight.sh "$RELEASE_MODE"
+      - name: Strict verifier and benchmark evidence tests
+        shell: pwsh
+        run: |
+          ./scripts/test-release-verifier.ps1
+          python3 -m unittest discover -s capacity -p 'test_*.py'
+          if ($LASTEXITCODE -ne 0) { throw 'capacity tooling regression failed' }
       - name: Validate exact release source
         env:
           MYSQL_DSN: root:release-test-only@tcp(127.0.0.1:3306)/event_workflow?parseTime=true&charset=utf8mb4&loc=UTC
@@ -96,4 +102,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_VERSION" --verify-tag --draft --generate-notes --title "$RELEASE_VERSION" dist/*/*.tar.gz dist/*/*.zip dist/*/checksums.txt
+        run: |
+          gh release create "$RELEASE_VERSION" --verify-tag --draft --notes-file "docs/releases/$RELEASE_VERSION.md" --title "$RELEASE_VERSION" dist/*/*.tar.gz dist/*/*.zip dist/*/checksums.txt
