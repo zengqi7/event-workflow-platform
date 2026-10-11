@@ -6,6 +6,29 @@ names and checksums, and emits GitHub build attestations. Manual dispatch builds
 snapshot artifacts only. Verify the draft in a new directory with
 `scripts/verify-release-download.ps1` before publishing it.
 
+Use the immutable release commit for both `ExpectedSourceSha` and
+`ExpectedSignerSha` in this non-reusable workflow. GitHub's certificate
+`BuildSignerDigest` is a commit SHA, not the blob SHA of `release.yml`.
+The verifier additionally pins the workflow path and tag ref, rejects self-hosted
+runners, and requires every archive checksum and provenance verification to pass.
+The old parameter name `ExpectedWorkflowSha` remains an alias but has the same
+commit semantics.
+
+```powershell
+# Keep the verified TUF cache on the operator's chosen data drive.
+$env:XDG_CACHE_HOME = 'E:\GitHubCLICache\release-verification'
+$releaseCommit = git rev-list -n 1 v0.1.0
+& .\scripts\verify-release-download.ps1 `
+  -ExpectedSourceSha $releaseCommit -ExpectedSignerSha $releaseCommit `
+  -Destination 'E:\release-verification\event-workflow-platform-fresh' `
+  -GhCommand 'E:\Apps\GitHubCLI\gh.exe'
+```
+
+Use a new or empty destination on each attempt. If Sigstore initialization fails,
+check network access, clock, disk space and cache permissions; retry with a fresh
+cache directory. Never bypass TUF, signature, transparency-log or identity checks.
+Retain the failed attempt separately. Do not publish a draft on partial success.
+
 ## Compatibility
 
 This is a pre-1.0 reference implementation, without a production SLA or a zero-downtime schema guarantee. API v1 may add fields; clients should ignore unknown fields. Auth/trust requirements and schema contracts can change only with an explicit upgrade note. Use reviewed immutable revisions for CI Actions and digest-pinned images.
