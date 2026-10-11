@@ -6,6 +6,26 @@
     "description": "Tenant identity derives from Bearer credentials. Event tenant_code is optional and must match the authenticated tenant when supplied."
   },
   "paths": {
+    "/api/v1/workflows": {
+      "post": {
+        "description": "Publish an immutable workflow version; workflows:write required. Dependent nodes may only be draft until E3.",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {
+          "type": "object", "additionalProperties": false, "required": ["name", "version", "status", "definition"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1, "maxLength": 128},
+            "version": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+            "status": {"enum": ["active", "draft"]}, "rule_id": {"type": "integer", "minimum": 0},
+            "definition": {"type": "object", "additionalProperties": false, "required": ["nodes"], "properties": {"nodes": {
+              "type": "array", "minItems": 1, "maxItems": 100, "items": {
+                "type": "object", "additionalProperties": false, "required": ["key", "type", "config"],
+                "properties": {"key": {"type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"}, "type": {"const": "webhook"}, "config": {"type": "object", "required": ["url"], "properties": {"url": {"type": "string", "maxLength": 2048}, "method": {"enum": ["POST", "PUT"]}}}, "depends_on": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}
+              }
+            }}}
+          }
+        }}}},
+        "responses": {"201": {"description": "Published", "content": {"application/json": {"schema": {"type": "object", "required": ["workflow_id"], "properties": {"workflow_id": {"type": "integer", "minimum": 1}}}}}}, "400": {"description": "Invalid definition or draft rule binding"}, "401": {"description": "Invalid credential"}, "403": {"description": "Insufficient scope"}, "404": {"description": "Unknown or foreign rule"}, "409": {"description": "Version already exists"}, "429": {"description": "Quota exceeded"}, "500": {"description": "Publication failed"}}
+      }
+    },
     "/healthz": {
       "get": {
         "responses": {

@@ -166,7 +166,9 @@ LIMIT 1`
 	if err != nil {
 		return workflow.Workflow{}, err
 	}
-	if err := json.Unmarshal(definitionRaw, &item.Definition); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(definitionRaw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&item.Definition); err != nil {
 		return workflow.Workflow{}, err
 	}
 	return item, nil
@@ -249,8 +251,8 @@ INSERT INTO events (
 
 	const insertRunQuery = `
 INSERT INTO workflow_runs (
-  tenant_id, event_id, workflow_id, trigger_rule_id, status, started_at
-) VALUES (?, ?, ?, ?, ?, ?)`
+  tenant_id, event_id, workflow_id, trigger_rule_id, status, started_at, workflow_version, definition_json, definition_digest, snapshot_origin
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'runtime')`
 
 	const insertTaskQuery = `
 INSERT INTO workflow_tasks (
@@ -270,6 +272,9 @@ INSERT INTO outbox_events (
 			plan.TriggerRuleID,
 			"pending",
 			evt.CreatedAt,
+			plan.WorkflowVersion,
+			plan.DefinitionJSON,
+			plan.DefinitionDigest,
 		)
 		if err != nil {
 			return domainrepo.PersistResult{}, err

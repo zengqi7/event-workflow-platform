@@ -11,7 +11,11 @@ import (
 	"event-workflow-platform/internal/domain/workflow"
 )
 
-func BuildRunPlan(evt domainevent.Event, matchedRule rule.Rule, definition workflow.Workflow) workflow.RunPlan {
+func BuildRunPlan(evt domainevent.Event, matchedRule rule.Rule, definition workflow.Workflow) (workflow.RunPlan, error) {
+	raw, digest, err := definition.Definition.Snapshot()
+	if err != nil {
+		return workflow.RunPlan{}, err
+	}
 	tasks := make([]workflow.TaskPlan, 0, len(definition.Definition.Nodes))
 	for _, node := range definition.Definition.Nodes {
 		tasks = append(tasks, workflow.TaskPlan{
@@ -20,14 +24,18 @@ func BuildRunPlan(evt domainevent.Event, matchedRule rule.Rule, definition workf
 			Config:         node.Config,
 			ScheduledAt:    time.Now().UTC(),
 			IdempotencyKey: taskIdempotencyKey(evt.Fingerprint, matchedRule.ID, node.Key),
+			DependsOn:      append([]string(nil), node.DependsOn...),
 		})
 	}
 
 	return workflow.RunPlan{
-		WorkflowID:    definition.ID,
-		TriggerRuleID: matchedRule.ID,
-		Tasks:         tasks,
-	}
+		WorkflowID:       definition.ID,
+		TriggerRuleID:    matchedRule.ID,
+		Tasks:            tasks,
+		WorkflowVersion:  definition.Version,
+		DefinitionJSON:   raw,
+		DefinitionDigest: digest,
+	}, nil
 }
 
 func taskIdempotencyKey(fingerprint string, ruleID uint64, nodeKey string) string {
